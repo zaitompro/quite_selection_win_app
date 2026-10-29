@@ -24,10 +24,13 @@ internal sealed class SettingsWindow : Window
     private TextBlock? piperStatus;
     private TextBlock? sileroStatus;
     private TextBlock? additionalStatus;
+    // Slider changes apply in memory at once; the file is written once the value settles.
+    private readonly System.Windows.Threading.DispatcherTimer pendingSave = new() { Interval = TimeSpan.FromMilliseconds(400) };
 
     internal SettingsWindow(AppShell owner)
     {
         shell = owner;
+        pendingSave.Tick += (_, _) => FlushSave();
         SystemTheme.ApplyWindow(this);
         Title = "QuietSelection — Настройки";
         Width = Math.Min(960, SystemParameters.WorkArea.Width - 30);
@@ -68,10 +71,16 @@ internal sealed class SettingsWindow : Window
             if (e.Command == ApplicationCommands.Copy || e.Command == ApplicationCommands.Cut || e.Command == ApplicationCommands.Paste) e.Handled = true;
         });
         shell.Changed += Update;
-        Closed += (_, _) => shell.Changed -= Update;
+        Closed += (_, _) => { FlushSave(); shell.Changed -= Update; };
         OpenGeneral(); Update();
     }
 
+    private void ScheduleSave() { pendingSave.Stop(); pendingSave.Start(); }
+    private void FlushSave()
+    {
+        if (!pendingSave.IsEnabled) return;
+        pendingSave.Stop(); shell.Save();
+    }
     internal void OpenGeneral() { navigation.SelectedIndex = 0; RenderPage(); }
     internal void OpenSection(int index) { navigation.SelectedIndex = index; RenderPage(); }
     private void Update()
@@ -201,7 +210,7 @@ internal sealed class SettingsWindow : Window
         panel.Children.Add(speedLabel);
         var speed = new Slider { Minimum = 0, Maximum = 100, Value = settings.Speed, TickFrequency = 1, IsSnapToTickEnabled = true, SmallChange = 1, LargeChange = 10, Margin = new(0, 5, 0, 8) };
         AutomationProperties.SetName(speed, "Скорость: " + AppSettings.SupportedLanguages[settings.Language]);
-        speed.ValueChanged += (_, _) => { settings.Speed = (int)speed.Value; speedLabel.Text = SpeedLabel(); shell.Save(); }; panel.Children.Add(speed);
+        speed.ValueChanged += (_, _) => { settings.Speed = (int)speed.Value; speedLabel.Text = SpeedLabel(); ScheduleSave(); }; panel.Children.Add(speed);
         panel.Children.Add(Button("Прослушать", async () => await shell.PreviewAsync(settings)));
         parent.Children.Add(panel);
     }
@@ -275,9 +284,8 @@ internal sealed class SettingsWindow : Window
         panel.Children.Add(Button("Английские голоса Kokoro — 120,58 МБ…", async () => { help.Close(); await shell.InstallAdditionalAsync(QuietSelection.App.Speech.SpeechEngine.Kokoro); RenderPage(); }));
         panel.Children.Add(new TextBlock { Text = "VOICEVOX:四国めたん (женский) и VOICEVOX:玄野武宏 (мужской), обычные варианты. Для распространяемого аудио требуется кредит выбранного голоса. Условия VOICEVOX и персонажей: third-party/voicevox внутри приложения.", TextWrapping = TextWrapping.Wrap, Margin = new(0, 12, 0, 0) });
         panel.Children.Add(Button("Японские голоса VOICEVOX — 116,43 МБ…", async () => { help.Close(); await shell.InstallAdditionalAsync(QuietSelection.App.Speech.SpeechEngine.Voicevox); RenderPage(); }));
-        panel.Children.Add(new TextBlock { Text = "Silero English — 118 голосов en_0–en_117 в одной модели. Бесплатное некоммерческое использование (CC BY-NC-SA 4.0). Номер голоса сохраняется при выборе; текущий Piper не заменяется автоматически.", TextWrapping = TextWrapping.Wrap, Margin = new(0, 12, 0, 0) });
-        panel.Children.Add(Button($"Английские голоса Silero — {SileroModels.EnglishCatalog.File.Bytes / 1_000_000.0:F2} МБ…", async () => { help.Close(); await shell.InstallSileroAsync("en"); RenderPage(); }));
-        panel.Children.Add(new TextBlock { Text = "Бесплатные голоса RHVoice — локальное чтение через SAPI 5. Движок включён в загрузку.", TextWrapping = TextWrapping.Wrap });
+        // Silero English was rejected after listening tests and is no longer offered (see README).
+        panel.Children.Add(new TextBlock { Text = "Бесплатные голоса RHVoice — локальное чтение через SAPI 5. Движок включён в загрузку.", TextWrapping = TextWrapping.Wrap, Margin = new(0, 12, 0, 0) });
         foreach (var package in RhVoiceInstallation.Packages)
             panel.Children.Add(Button($"RHVoice {package.Name} — {AppSettings.SupportedLanguages[package.Language]}, {package.Bytes / 1_000_000.0:F2} МБ…",
                 async () => { help.Close(); await shell.InstallRhVoiceAsync(package); RenderPage(); }));

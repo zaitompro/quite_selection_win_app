@@ -22,8 +22,58 @@ internal static class ModelPreparation
         return JsonSerializer.Deserialize<ModelArchive[]>(stream)!;
     }
 
+    // Size and write time of each file after its last full hash check in this process.
+    private static readonly object verifiedGate = new();
+    private static Dictionary<string, (long Length, DateTime Written)>? verified;
+
+    /// <summary>Full SHA-256 verification. On success, remembers file metadata for <see cref="VerifyCachedAsync"/>.</summary>
     internal static async Task VerifyAsync(string root, CancellationToken token)
-        => await VerifyFilesAsync(root, Catalog.SelectMany(x => x.Files), token);
+    {
+        var files = Catalog.SelectMany(x => x.Files).ToArray();
+        var before = Fingerprints(root, files);
+        try { await VerifyFilesAsync(root, files, token); }
+        catch { Forget(); throw; }
+        var after = Fingerprints(root, files);
+        lock (verifiedGate) verified = before is not null && Same(before, after) ? after : null;
+    }
+
+    /// <summary>Skips hashing when no file changed size or write time since the last full verification.</summary>
+    internal static Task VerifyCachedAsync(string root, CancellationToken token)
+    {
+        Dictionary<string, (long, DateTime)>? known;
+        lock (verifiedGate) known = verified;
+        var current = Fingerprints(root, Catalog.SelectMany(x => x.Files));
+        return known is not null && Same(known, current) ? Task.CompletedTask : VerifyAsync(root, token);
+    }
+
+    private static void Forget() { lock (verifiedGate) verified = null; }
+
+    private static Dictionary<string, (long Length, DateTime Written)>? Fingerprints(string root, IEnumerable<ModelFile> files)
+    {
+        var result = new Dictionary<string, (long, DateTime)>(StringComparer.OrdinalIgnoreCase);
+        foreach (var file in files)
+        {
+            var info = new FileInfo(SafePath(root, file.Path));
+            if (!info.Exists) return null;
+            result[info.FullName] = (info.Length, info.LastWriteTimeUtc);
+        }
+        return result;
+    }
+
+    private static bool Same(Dictionary<string, (long Length, DateTime Written)> a, Dictionary<string, (long Length, DateTime Written)>? b)
+        => b is not null && a.Count == b.Count && a.All(x => b.TryGetValue(x.Key, out var y) && y == x.Value);
+
+    // Leftovers of earlier preparations. Removed only while a current installation exists.
+    private static void DeletePreviousInstallations(string root)
+    {
+        string parent = Path.GetDirectoryName(root)!, prefix = Path.GetFileName(root) + ".previous-";
+        if (!Directory.Exists(root) || !Directory.Exists(parent)) return;
+        foreach (string directory in Directory.EnumerateDirectories(parent, prefix + "*"))
+        {
+            if (!Path.GetFileName(directory).StartsWith(prefix, StringComparison.Ordinal)) continue;
+            try { Directory.Delete(directory, recursive: true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+        }
+    }
 
     private static async Task VerifyFilesAsync(string root, IEnumerable<ModelFile> files, CancellationToken token)
     {
@@ -51,6 +101,8 @@ internal static class ModelPreparation
         Directory.CreateDirectory(parent);
         // Exclusive preparation lease, including separately launched diagnostic instances.
         await using var lease = new FileStream(Path.Combine(parent, "preparation.lock"), FileMode.OpenOrCreate, FileAccess.Write, FileShare.None);
+        DeletePreviousInstallations(root);
+        Forget();
         string stage = Path.Combine(parent, "preparing-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(stage);
         bool committed = false;
@@ -113,7 +165,7 @@ internal static class ModelPreparation
                     Directory.Delete(SafePath(stage, "ja_ru_source"), recursive: true);
                 }
             }
-            await VerifyAsync(stage, token);
+            await VerifyFilesAsync(stage, Catalog.SelectMany(x => x.Files), token);
             progress.Report("Проверка: реальный локальный перевод трёх тестовых фраз…");
             await new TranslationClient(stage).ProbeAsync(token);
             token.ThrowIfCancellationRequested();
@@ -122,6 +174,7 @@ internal static class ModelPreparation
             if (Directory.Exists(root)) { previousRoot = root + ".previous-" + Guid.NewGuid().ToString("N"); Directory.Move(root, previousRoot); }
             try { Directory.Move(stage, root); committed = true; }
             catch { if (previousRoot is not null && !Directory.Exists(root)) Directory.Move(previousRoot, root); throw; }
+            DeletePreviousInstallations(root);
         }
         finally
         {

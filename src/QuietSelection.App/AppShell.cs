@@ -256,16 +256,19 @@ internal sealed class AppShell : IDisposable
         Settings.Hotkeys[command] = chord; Save(); return true;
     }
     internal void Stop() => operations.Stop();
-    internal async void Exit()
+    internal void Exit() => _ = ExitAsync();
+    private async Task ExitAsync()
     {
         if (exiting) return;
         exiting = true; operations.Stop(); modelPreparation?.Cancel(); voiceDownload?.Cancel(); piperCacheCancellation?.Cancel(); sileroCacheCancellation?.Cancel(); additionalCacheCancellation?.Cancel();
-        if (modelTask is not null) await modelTask;
-        if (voicePreparation is not null) await voicePreparation;
-        if (piperCacheTask is not null) await piperCacheTask;
-        if (sileroCacheTask is not null) await sileroCacheTask;
-        if (additionalCacheTask is not null) await additionalCacheTask;
-        application.Shutdown();
+        try
+        {
+            foreach (var task in new[] { modelTask, voicePreparation, piperCacheTask, sileroCacheTask, additionalCacheTask })
+                if (task is not null)
+                    try { await task; }
+                    catch { } // A failed background task must not prevent exit.
+        }
+        finally { application.Shutdown(); }
     }
 
     internal void CancelModelPreparation() => modelPreparation?.Cancel();
@@ -501,7 +504,7 @@ internal sealed class AppShell : IDisposable
                 if (plan.Any(x => x.Source != snapshot.Primary.Language))
                 {
                     if (PreparingModels) throw new QuietException(ErrorCode.ModelMissing);
-                    await ModelPreparation.VerifyAsync(TranslationClient.DefaultModelRoot, operation.Token);
+                    await ModelPreparation.VerifyCachedAsync(TranslationClient.DefaultModelRoot, operation.Token);
                     text = await new TranslationClient(TranslationClient.DefaultModelRoot).TranslateAsync(plan, snapshot.Primary.Language, operation.Token);
                 }
                 operation.Token.ThrowIfCancellationRequested();
