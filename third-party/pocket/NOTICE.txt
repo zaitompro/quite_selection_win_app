@@ -1,0 +1,39 @@
+Pocket TTS by Kyutai
+Code: https://github.com/kyutai-labs/pocket-tts
+Runtime: official PyPI pocket-tts 3.3.0, MIT (LICENSE).
+Model: https://huggingface.co/kyutai/pocket-tts-without-voice-cloning
+English 2026-09_2 weights, revision 575d14372df89a4534bcb989870a34e77544b09f
+Model license: CC BY 4.0 (CC-BY-4.0.txt).
+Tokenizer revision: 00eac05ed3d16bdc3f6b5d598874019c34a89214
+Voice embedding revision: ab248779e0718743c013e20b2d812ace7c8f4bf7
+Config: upstream commit 9aa7a7f0e52a4cd81bcf8a0fc7c981cdc6d11e53
+
+Weights and embeddings are unchanged. QuietSelection loads explicit local files,
+uses CPU float32, temperature 0.3, one decode step, two inference threads, keeps
+only selected profiles, disables voice cloning and blocks network/file writes
+in the worker. Two eager-only runtime changes are applied reproducibly by
+Prepare-PocketRuntime.py: omit the torch.compiler.disable decorator on the
+attention-mask helper and omit einops' Dynamo registration. This prevents unused
+compiler disk-cache initialization; tensor computations are unchanged.
+Our adapter adds bounded text
+segmentation, cancellation/draining, private PCM IPC and WSOLA speed adjustment.
+Source text and generated audio are not saved.
+
+Voice source attribution: https://huggingface.co/kyutai/tts-voices
+See VOICES-UPSTREAM.md and voice-sources.json for each original recording.
+Alba: Alba MacKenna, casual.wav, CC BY 4.0.
+Anna, Azelma, Charles, Eponine, Eve, Fantine, George, Jane, Mary, Michael,
+Paul, Vera: VCTK, University of Edinburgh, CC BY 4.0.
+Cosette: Expresso dataset, Meta, CC BY-NC 4.0, NON-COMMERCIAL ONLY.
+Jean: EARS dataset, CC BY-NC 4.0, NON-COMMERCIAL ONLY.
+Marius, Javert: Unmute Voice Donation Project, CC0.
+Bill Boerst, Caro Davy, Peter Yearsley, Stuart Bell: Voice-Zero / LibriVox, CC0.
+
+The model's CC BY license does not supersede the individual voice-source terms.
+All are suitable for the requested personal offline evaluation. Commercial
+redistribution/use must exclude the non-commercial profiles or obtain permission.
+
+The inference-only dependencies are pinned in runtime.json; package license
+files remain alongside each library in pocket-runtime/*.dist-info/licenses.
+CPU PyTorch, NumPy, sentencepiece, PyYAML and typing_extensions reuse the existing
+application runtimes, with their existing notices. No server or cloud API is used.

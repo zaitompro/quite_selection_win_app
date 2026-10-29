@@ -1,0 +1,601 @@
+{
+  "File": {
+    "Name": "v3_en.pt",
+    "Bytes": 57194546,
+    "Sha256": "02b71034d9f13bc4001195017bac9db1c6bb6115e03fea52983e8abcff13b665",
+    "Url": "https://models.silero.ai/models/tts/en/v3_en.pt"
+  },
+  "Language": "en-US",
+  "Voices": [
+    {
+      "Id": "silero:v3_en:en_0",
+      "Speaker": "en_0",
+      "Name": "English 000 (en_0)"
+    },
+    {
+      "Id": "silero:v3_en:en_1",
+      "Speaker": "en_1",
+      "Name": "English 001 (en_1)"
+    },
+    {
+      "Id": "silero:v3_en:en_2",
+      "Speaker": "en_2",
+      "Name": "English 002 (en_2)"
+    },
+    {
+      "Id": "silero:v3_en:en_3",
+      "Speaker": "en_3",
+      "Name": "English 003 (en_3)"
+    },
+    {
+      "Id": "silero:v3_en:en_4",
+      "Speaker": "en_4",
+      "Name": "English 004 (en_4)"
+    },
+    {
+      "Id": "silero:v3_en:en_5",
+      "Speaker": "en_5",
+      "Name": "English 005 (en_5)"
+    },
+    {
+      "Id": "silero:v3_en:en_6",
+      "Speaker": "en_6",
+      "Name": "English 006 (en_6)"
+    },
+    {
+      "Id": "silero:v3_en:en_7",
+      "Speaker": "en_7",
+      "Name": "English 007 (en_7)"
+    },
+    {
+      "Id": "silero:v3_en:en_8",
+      "Speaker": "en_8",
+      "Name": "English 008 (en_8)"
+    },
+    {
+      "Id": "silero:v3_en:en_9",
+      "Speaker": "en_9",
+      "Name": "English 009 (en_9)"
+    },
+    {
+      "Id": "silero:v3_en:en_10",
+      "Speaker": "en_10",
+      "Name": "English 010 (en_10)"
+    },
+    {
+      "Id": "silero:v3_en:en_11",
+      "Speaker": "en_11",
+      "Name": "English 011 (en_11)"
+    },
+    {
+      "Id": "silero:v3_en:en_12",
+      "Speaker": "en_12",
+      "Name": "English 012 (en_12)"
+    },
+    {
+      "Id": "silero:v3_en:en_13",
+      "Speaker": "en_13",
+      "Name": "English 013 (en_13)"
+    },
+    {
+      "Id": "silero:v3_en:en_14",
+      "Speaker": "en_14",
+      "Name": "English 014 (en_14)"
+    },
+    {
+      "Id": "silero:v3_en:en_15",
+      "Speaker": "en_15",
+      "Name": "English 015 (en_15)"
+    },
+    {
+      "Id": "silero:v3_en:en_16",
+      "Speaker": "en_16",
+      "Name": "English 016 (en_16)"
+    },
+    {
+      "Id": "silero:v3_en:en_17",
+      "Speaker": "en_17",
+      "Name": "English 017 (en_17)"
+    },
+    {
+      "Id": "silero:v3_en:en_18",
+      "Speaker": "en_18",
+      "Name": "English 018 (en_18)"
+    },
+    {
+      "Id": "silero:v3_en:en_19",
+      "Speaker": "en_19",
+      "Name": "English 019 (en_19)"
+    },
+    {
+      "Id": "silero:v3_en:en_20",
+      "Speaker": "en_20",
+      "Name": "English 020 (en_20)"
+    },
+    {
+      "Id": "silero:v3_en:en_21",
+      "Speaker": "en_21",
+      "Name": "English 021 (en_21)"
+    },
+    {
+      "Id": "silero:v3_en:en_22",
+      "Speaker": "en_22",
+      "Name": "English 022 (en_22)"
+    },
+    {
+      "Id": "silero:v3_en:en_23",
+      "Speaker": "en_23",
+      "Name": "English 023 (en_23)"
+    },
+    {
+      "Id": "silero:v3_en:en_24",
+      "Speaker": "en_24",
+      "Name": "English 024 (en_24)"
+    },
+    {
+      "Id": "silero:v3_en:en_25",
+      "Speaker": "en_25",
+      "Name": "English 025 (en_25)"
+    },
+    {
+      "Id": "silero:v3_en:en_26",
+      "Speaker": "en_26",
+      "Name": "English 026 (en_26)"
+    },
+    {
+      "Id": "silero:v3_en:en_27",
+      "Speaker": "en_27",
+      "Name": "English 027 (en_27)"
+    },
+    {
+      "Id": "silero:v3_en:en_28",
+      "Speaker": "en_28",
+      "Name": "English 028 (en_28)"
+    },
+    {
+      "Id": "silero:v3_en:en_29",
+      "Speaker": "en_29",
+      "Name": "English 029 (en_29)"
+    },
+    {
+      "Id": "silero:v3_en:en_30",
+      "Speaker": "en_30",
+      "Name": "English 030 (en_30)"
+    },
+    {
+      "Id": "silero:v3_en:en_31",
+      "Speaker": "en_31",
+      "Name": "English 031 (en_31)"
+    },
+    {
+      "Id": "silero:v3_en:en_32",
+      "Speaker": "en_32",
+      "Name": "English 032 (en_32)"
+    },
+    {
+      "Id": "silero:v3_en:en_33",
+      "Speaker": "en_33",
+      "Name": "English 033 (en_33)"
+    },
+    {
+      "Id": "silero:v3_en:en_34",
+      "Speaker": "en_34",
+      "Name": "English 034 (en_34)"
+    },
+    {
+      "Id": "silero:v3_en:en_35",
+      "Speaker": "en_35",
+      "Name": "English 035 (en_35)"
+    },
+    {
+      "Id": "silero:v3_en:en_36",
+      "Speaker": "en_36",
+      "Name": "English 036 (en_36)"
+    },
+    {
+      "Id": "silero:v3_en:en_37",
+      "Speaker": "en_37",
+      "Name": "English 037 (en_37)"
+    },
+    {
+      "Id": "silero:v3_en:en_38",
+      "Speaker": "en_38",
+      "Name": "English 038 (en_38)"
+    },
+    {
+      "Id": "silero:v3_en:en_39",
+      "Speaker": "en_39",
+      "Name": "English 039 (en_39)"
+    },
+    {
+      "Id": "silero:v3_en:en_40",
+      "Speaker": "en_40",
+      "Name": "English 040 (en_40)"
+    },
+    {
+      "Id": "silero:v3_en:en_41",
+      "Speaker": "en_41",
+      "Name": "English 041 (en_41)"
+    },
+    {
+      "Id": "silero:v3_en:en_42",
+      "Speaker": "en_42",
+      "Name": "English 042 (en_42)"
+    },
+    {
+      "Id": "silero:v3_en:en_43",
+      "Speaker": "en_43",
+      "Name": "English 043 (en_43)"
+    },
+    {
+      "Id": "silero:v3_en:en_44",
+      "Speaker": "en_44",
+      "Name": "English 044 (en_44)"
+    },
+    {
+      "Id": "silero:v3_en:en_45",
+      "Speaker": "en_45",
+      "Name": "English 045 (en_45)"
+    },
+    {
+      "Id": "silero:v3_en:en_46",
+      "Speaker": "en_46",
+      "Name": "English 046 (en_46)"
+    },
+    {
+      "Id": "silero:v3_en:en_47",
+      "Speaker": "en_47",
+      "Name": "English 047 (en_47)"
+    },
+    {
+      "Id": "silero:v3_en:en_48",
+      "Speaker": "en_48",
+      "Name": "English 048 (en_48)"
+    },
+    {
+      "Id": "silero:v3_en:en_49",
+      "Speaker": "en_49",
+      "Name": "English 049 (en_49)"
+    },
+    {
+      "Id": "silero:v3_en:en_50",
+      "Speaker": "en_50",
+      "Name": "English 050 (en_50)"
+    },
+    {
+      "Id": "silero:v3_en:en_51",
+      "Speaker": "en_51",
+      "Name": "English 051 (en_51)"
+    },
+    {
+      "Id": "silero:v3_en:en_52",
+      "Speaker": "en_52",
+      "Name": "English 052 (en_52)"
+    },
+    {
+      "Id": "silero:v3_en:en_53",
+      "Speaker": "en_53",
+      "Name": "English 053 (en_53)"
+    },
+    {
+      "Id": "silero:v3_en:en_54",
+      "Speaker": "en_54",
+      "Name": "English 054 (en_54)"
+    },
+    {
+      "Id": "silero:v3_en:en_55",
+      "Speaker": "en_55",
+      "Name": "English 055 (en_55)"
+    },
+    {
+      "Id": "silero:v3_en:en_56",
+      "Speaker": "en_56",
+      "Name": "English 056 (en_56)"
+    },
+    {
+      "Id": "silero:v3_en:en_57",
+      "Speaker": "en_57",
+      "Name": "English 057 (en_57)"
+    },
+    {
+      "Id": "silero:v3_en:en_58",
+      "Speaker": "en_58",
+      "Name": "English 058 (en_58)"
+    },
+    {
+      "Id": "silero:v3_en:en_59",
+      "Speaker": "en_59",
+      "Name": "English 059 (en_59)"
+    },
+    {
+      "Id": "silero:v3_en:en_60",
+      "Speaker": "en_60",
+      "Name": "English 060 (en_60)"
+    },
+    {
+      "Id": "silero:v3_en:en_61",
+      "Speaker": "en_61",
+      "Name": "English 061 (en_61)"
+    },
+    {
+      "Id": "silero:v3_en:en_62",
+      "Speaker": "en_62",
+      "Name": "English 062 (en_62)"
+    },
+    {
+      "Id": "silero:v3_en:en_63",
+      "Speaker": "en_63",
+      "Name": "English 063 (en_63)"
+    },
+    {
+      "Id": "silero:v3_en:en_64",
+      "Speaker": "en_64",
+      "Name": "English 064 (en_64)"
+    },
+    {
+      "Id": "silero:v3_en:en_65",
+      "Speaker": "en_65",
+      "Name": "English 065 (en_65)"
+    },
+    {
+      "Id": "silero:v3_en:en_66",
+      "Speaker": "en_66",
+      "Name": "English 066 (en_66)"
+    },
+    {
+      "Id": "silero:v3_en:en_67",
+      "Speaker": "en_67",
+      "Name": "English 067 (en_67)"
+    },
+    {
+      "Id": "silero:v3_en:en_68",
+      "Speaker": "en_68",
+      "Name": "English 068 (en_68)"
+    },
+    {
+      "Id": "silero:v3_en:en_69",
+      "Speaker": "en_69",
+      "Name": "English 069 (en_69)"
+    },
+    {
+      "Id": "silero:v3_en:en_70",
+      "Speaker": "en_70",
+      "Name": "English 070 (en_70)"
+    },
+    {
+      "Id": "silero:v3_en:en_71",
+      "Speaker": "en_71",
+      "Name": "English 071 (en_71)"
+    },
+    {
+      "Id": "silero:v3_en:en_72",
+      "Speaker": "en_72",
+      "Name": "English 072 (en_72)"
+    },
+    {
+      "Id": "silero:v3_en:en_73",
+      "Speaker": "en_73",
+      "Name": "English 073 (en_73)"
+    },
+    {
+      "Id": "silero:v3_en:en_74",
+      "Speaker": "en_74",
+      "Name": "English 074 (en_74)"
+    },
+    {
+      "Id": "silero:v3_en:en_75",
+      "Speaker": "en_75",
+      "Name": "English 075 (en_75)"
+    },
+    {
+      "Id": "silero:v3_en:en_76",
+      "Speaker": "en_76",
+      "Name": "English 076 (en_76)"
+    },
+    {
+      "Id": "silero:v3_en:en_77",
+      "Speaker": "en_77",
+      "Name": "English 077 (en_77)"
+    },
+    {
+      "Id": "silero:v3_en:en_78",
+      "Speaker": "en_78",
+      "Name": "English 078 (en_78)"
+    },
+    {
+      "Id": "silero:v3_en:en_79",
+      "Speaker": "en_79",
+      "Name": "English 079 (en_79)"
+    },
+    {
+      "Id": "silero:v3_en:en_80",
+      "Speaker": "en_80",
+      "Name": "English 080 (en_80)"
+    },
+    {
+      "Id": "silero:v3_en:en_81",
+      "Speaker": "en_81",
+      "Name": "English 081 (en_81)"
+    },
+    {
+      "Id": "silero:v3_en:en_82",
+      "Speaker": "en_82",
+      "Name": "English 082 (en_82)"
+    },
+    {
+      "Id": "silero:v3_en:en_83",
+      "Speaker": "en_83",
+      "Name": "English 083 (en_83)"
+    },
+    {
+      "Id": "silero:v3_en:en_84",
+      "Speaker": "en_84",
+      "Name": "English 084 (en_84)"
+    },
+    {
+      "Id": "silero:v3_en:en_85",
+      "Speaker": "en_85",
+      "Name": "English 085 (en_85)"
+    },
+    {
+      "Id": "silero:v3_en:en_86",
+      "Speaker": "en_86",
+      "Name": "English 086 (en_86)"
+    },
+    {
+      "Id": "silero:v3_en:en_87",
+      "Speaker": "en_87",
+      "Name": "English 087 (en_87)"
+    },
+    {
+      "Id": "silero:v3_en:en_88",
+      "Speaker": "en_88",
+      "Name": "English 088 (en_88)"
+    },
+    {
+      "Id": "silero:v3_en:en_89",
+      "Speaker": "en_89",
+      "Name": "English 089 (en_89)"
+    },
+    {
+      "Id": "silero:v3_en:en_90",
+      "Speaker": "en_90",
+      "Name": "English 090 (en_90)"
+    },
+    {
+      "Id": "silero:v3_en:en_91",
+      "Speaker": "en_91",
+      "Name": "English 091 (en_91)"
+    },
+    {
+      "Id": "silero:v3_en:en_92",
+      "Speaker": "en_92",
+      "Name": "English 092 (en_92)"
+    },
+    {
+      "Id": "silero:v3_en:en_93",
+      "Speaker": "en_93",
+      "Name": "English 093 (en_93)"
+    },
+    {
+      "Id": "silero:v3_en:en_94",
+      "Speaker": "en_94",
+      "Name": "English 094 (en_94)"
+    },
+    {
+      "Id": "silero:v3_en:en_95",
+      "Speaker": "en_95",
+      "Name": "English 095 (en_95)"
+    },
+    {
+      "Id": "silero:v3_en:en_96",
+      "Speaker": "en_96",
+      "Name": "English 096 (en_96)"
+    },
+    {
+      "Id": "silero:v3_en:en_97",
+      "Speaker": "en_97",
+      "Name": "English 097 (en_97)"
+    },
+    {
+      "Id": "silero:v3_en:en_98",
+      "Speaker": "en_98",
+      "Name": "English 098 (en_98)"
+    },
+    {
+      "Id": "silero:v3_en:en_99",
+      "Speaker": "en_99",
+      "Name": "English 099 (en_99)"
+    },
+    {
+      "Id": "silero:v3_en:en_100",
+      "Speaker": "en_100",
+      "Name": "English 100 (en_100)"
+    },
+    {
+      "Id": "silero:v3_en:en_101",
+      "Speaker": "en_101",
+      "Name": "English 101 (en_101)"
+    },
+    {
+      "Id": "silero:v3_en:en_102",
+      "Speaker": "en_102",
+      "Name": "English 102 (en_102)"
+    },
+    {
+      "Id": "silero:v3_en:en_103",
+      "Speaker": "en_103",
+      "Name": "English 103 (en_103)"
+    },
+    {
+      "Id": "silero:v3_en:en_104",
+      "Speaker": "en_104",
+      "Name": "English 104 (en_104)"
+    },
+    {
+      "Id": "silero:v3_en:en_105",
+      "Speaker": "en_105",
+      "Name": "English 105 (en_105)"
+    },
+    {
+      "Id": "silero:v3_en:en_106",
+      "Speaker": "en_106",
+      "Name": "English 106 (en_106)"
+    },
+    {
+      "Id": "silero:v3_en:en_107",
+      "Speaker": "en_107",
+      "Name": "English 107 (en_107)"
+    },
+    {
+      "Id": "silero:v3_en:en_108",
+      "Speaker": "en_108",
+      "Name": "English 108 (en_108)"
+    },
+    {
+      "Id": "silero:v3_en:en_109",
+      "Speaker": "en_109",
+      "Name": "English 109 (en_109)"
+    },
+    {
+      "Id": "silero:v3_en:en_110",
+      "Speaker": "en_110",
+      "Name": "English 110 (en_110)"
+    },
+    {
+      "Id": "silero:v3_en:en_111",
+      "Speaker": "en_111",
+      "Name": "English 111 (en_111)"
+    },
+    {
+      "Id": "silero:v3_en:en_112",
+      "Speaker": "en_112",
+      "Name": "English 112 (en_112)"
+    },
+    {
+      "Id": "silero:v3_en:en_113",
+      "Speaker": "en_113",
+      "Name": "English 113 (en_113)"
+    },
+    {
+      "Id": "silero:v3_en:en_114",
+      "Speaker": "en_114",
+      "Name": "English 114 (en_114)"
+    },
+    {
+      "Id": "silero:v3_en:en_115",
+      "Speaker": "en_115",
+      "Name": "English 115 (en_115)"
+    },
+    {
+      "Id": "silero:v3_en:en_116",
+      "Speaker": "en_116",
+      "Name": "English 116 (en_116)"
+    },
+    {
+      "Id": "silero:v3_en:en_117",
+      "Speaker": "en_117",
+      "Name": "English 117 (en_117)"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+KittenTTS Mini 0.8
+Model: https://huggingface.co/KittenML/kitten-tts-mini-0.8
+Pinned model revision: c02725660cea441db4c383af69f1f26f5cd00947
+Code: https://github.com/KittenML/KittenTTS
+Reference code revision: f0282f0198d497b7256535b755f9f3e339c1baa7 (0.8.1)
+License: Apache License 2.0 (included as LICENSE).
+
+QuietSelection's kitten_engine.py adapts the upstream token inventory, token
+spacing, model inputs, style index and output padding. Changes: private bounded
+IPC; existing native eSpeak bridge; existing English number normalizer; bounded,
+lossless text segmentation; cancellation and CPU limits; no source-text logging,
+network access, Hugging Face client or audio files during inference.
+
+The weights and eight speaker profiles are separate local model data, verified
+by the hashes in kitten-models.json. They are not bundled inside the MSIX.
+ONNX Runtime, NumPy and eSpeak are already included with the application's
+existing speech runtime; their own licenses remain in third-party/piper.

@@ -1,0 +1,7 @@
+Сейчас звучит русская часть предложения, затем Japanese language и слово 日本語, после чего снова русский текст.
+
+This English sentence includes русские слова and 日本語 before returning to English.
+
+これは日本語の文です。途中に English words と русские слова が入っています。
+
+Да, hello, 日本語, снова yes, ありがとう.

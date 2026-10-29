@@ -1,0 +1,254 @@
+using System.Diagnostics;
+using System.IO.Pipes;
+using QuietSelection.App.Platform;
+
+namespace QuietSelection.App.Workers;
+
+internal sealed record SpeechPlanResult(double FirstAudioMilliseconds, double ElapsedMilliseconds,
+    double MaximumGapMilliseconds, int Chunks, long AudioBytes, WorkerResponse[] Syntheses);
+
+internal sealed class WorkerClient(IReadOnlyDictionary<Speech.SpeechEngine, string>? modelRoots = null) : IDisposable
+{
+    private readonly SemaphoreSlim workerSlot = new(1, 1);
+    private readonly Selection.SelectionClient selection = new();
+    private readonly Speech.PiperClient piper = new(modelRoots?.GetValueOrDefault(Speech.SpeechEngine.Piper), keepLoaded: true);
+    private readonly Speech.SileroClient silero = new(modelRoots?.GetValueOrDefault(Speech.SpeechEngine.Silero), keepLoaded: true);
+    private string[] residentVoiceIds = [];
+    private string[] residentSileroIds = [];
+    private readonly Dictionary<Speech.SpeechEngine, Speech.PythonSpeechClient> additional = new()
+    {
+        [Speech.SpeechEngine.Kokoro] = new(Speech.SpeechEngine.Kokoro, modelRoots?.GetValueOrDefault(Speech.SpeechEngine.Kokoro), keepLoaded: true),
+        [Speech.SpeechEngine.Voicevox] = new(Speech.SpeechEngine.Voicevox, modelRoots?.GetValueOrDefault(Speech.SpeechEngine.Voicevox), keepLoaded: true),
+        [Speech.SpeechEngine.Kitten] = new(Speech.SpeechEngine.Kitten, modelRoots?.GetValueOrDefault(Speech.SpeechEngine.Kitten), keepLoaded: true),
+        [Speech.SpeechEngine.Pocket] = new(Speech.SpeechEngine.Pocket, modelRoots?.GetValueOrDefault(Speech.SpeechEngine.Pocket), keepLoaded: true)
+    };
+    private string[] residentAdditionalIds = [];
+
+    internal async Task ConfigureAdditionalAsync(string[] ids, CancellationToken token)
+    {
+        await workerSlot.WaitAsync(token);
+        try
+        {
+            residentAdditionalIds = [];
+            foreach (var pair in additional)
+            {
+                string prefix = pair.Key.ToString().ToLowerInvariant();
+                string[] selected = ids.Where(x => x.StartsWith(prefix + ":", StringComparison.Ordinal)).ToArray();
+                if (selected.Length == 0) await pair.Value.ResetAsync(token);
+                else await pair.Value.CallAsync(new(prefix + "-configure", VoiceIds: selected), TimeSpan.FromMinutes(3), token);
+            }
+            residentAdditionalIds = ids.ToArray();
+        }
+        finally { workerSlot.Release(); }
+    }
+
+    internal async Task ConfigurePiperAsync(string[] ids, CancellationToken token)
+    {
+        await workerSlot.WaitAsync(token);
+        try
+        {
+            if (ids.Length == 0) await piper.ResetAsync(token);
+            else await piper.CallAsync(new("piper-configure", VoiceIds: ids), TimeSpan.FromMinutes(2), token);
+            residentVoiceIds = ids.ToArray();
+        }
+        finally { workerSlot.Release(); }
+    }
+
+    internal async Task ConfigureSileroAsync(string[] ids, CancellationToken token)
+    {
+        await workerSlot.WaitAsync(token);
+        try
+        {
+            if (ids.Length == 0) await silero.ResetAsync(token);
+            else await silero.CallAsync(new("silero-configure", VoiceIds: ids), TimeSpan.FromMinutes(3), token);
+            residentSileroIds = ids.ToArray();
+        }
+        finally { workerSlot.Release(); }
+    }
+
+    public void Dispose() { selection.Dispose(); piper.Dispose(); silero.Dispose(); foreach (var client in additional.Values) client.Dispose(); }
+
+    internal async Task<WorkerResponse> CallAsync(WorkerRequest request, TimeSpan timeout, CancellationToken token)
+    {
+        await workerSlot.WaitAsync(token);
+        try { return await ExecuteAsync(request, timeout, token); }
+        finally { workerSlot.Release(); }
+    }
+
+    internal async Task<SpeechPlanResult> SpeakPlanAsync(IReadOnlyList<SpeechSegment> segments, CancellationToken token,
+        Func<Speech.PcmChunk, CancellationToken, Task>? playback = null, bool prefetch = true)
+    {
+        await workerSlot.WaitAsync(token);
+        try
+        {
+            using var player = new Speech.PcmPlayer();
+            var clock = Stopwatch.StartNew();
+            double first = 0, ended = 0, maximumGap = 0;
+            int chunks = 0; long bytes = 0;
+            var responses = new List<WorkerResponse>();
+            async Task Play(Speech.PcmChunk pcm, CancellationToken cancellation)
+            {
+                void Submitted()
+                {
+                    if (chunks == 0) first = clock.Elapsed.TotalMilliseconds;
+                    else maximumGap = Math.Max(maximumGap, clock.Elapsed.TotalMilliseconds - ended);
+                    chunks++; bytes += pcm.Data.Length;
+                }
+                if (playback is null) await player.PlayAsync(pcm, cancellation, Submitted);
+                else { Submitted(); await playback(pcm, cancellation); }
+                ended = clock.Elapsed.TotalMilliseconds;
+            }
+            async Task Produce(Func<Speech.PcmChunk, CancellationToken, ValueTask> send, CancellationToken cancellation)
+            {
+                foreach (var segment in LanguagePlanner.BatchForPrefetch(segments))
+                {
+                    Speech.PythonSpeechClient? client = null;
+                    bool resident = false;
+                    if (segment.VoiceId.StartsWith("piper:", StringComparison.Ordinal))
+                    { client = piper; resident = residentVoiceIds.Contains(segment.VoiceId); }
+                    else if (segment.VoiceId.StartsWith("silero:", StringComparison.Ordinal))
+                    { client = silero; resident = residentSileroIds.Contains(segment.VoiceId); }
+                    else foreach (var pair in additional)
+                        if (segment.VoiceId.StartsWith(pair.Key.ToString().ToLowerInvariant() + ":", StringComparison.Ordinal))
+                        { client = pair.Value; resident = residentAdditionalIds.Contains(segment.VoiceId); break; }
+                    try
+                    {
+                        foreach (var part in BoundRequests(segment.Text, client is null ? 80 : 1000))
+                        {
+                            cancellation.ThrowIfCancellationRequested();
+                            if (string.IsNullOrWhiteSpace(part)) continue;
+                            var request = new WorkerRequest(client is null ? "synthesize-wave" : "synthesize-stream",
+                                Text: part, VoiceId: segment.VoiceId, Speed: segment.Speed);
+                            if (client is not null)
+                                responses.Add(await client.CallAsync(request, TimeSpan.FromMinutes(15), cancellation, audio: send));
+                            else
+                            {
+                                var result = await ExecuteAsync(request, TimeSpan.FromMinutes(2), cancellation);
+                                var wav = result.AudioData ?? throw new QuietException(ErrorCode.SpeechFailure);
+                                try
+                                {
+                                    foreach (var pcm in Speech.WavePcm.Read(wav)) await send(pcm, cancellation);
+                                    responses.Add(result with { AudioData = null });
+                                }
+                                finally { Array.Clear(wav); }
+                            }
+                        }
+                    }
+                    finally
+                    {
+                        if (client is not null && !resident) await client.ResetAsync(CancellationToken.None);
+                    }
+                }
+            }
+            if (prefetch) await PrefetchPlayback.RunAsync<Speech.PcmChunk>(Produce, Play, pcm => Array.Clear(pcm.Data), token);
+            else await Produce(async (pcm, cancellation) =>
+            {
+                try { await Play(pcm, cancellation); }
+                finally { Array.Clear(pcm.Data); }
+            }, token);
+            if (chunks == 0) throw new QuietException(ErrorCode.SpeechFailure);
+            return new(first, clock.Elapsed.TotalMilliseconds, maximumGap, chunks, bytes, responses.ToArray());
+        }
+        finally { workerSlot.Release(); }
+    }
+
+    private static IEnumerable<string> BoundRequests(string text, int limit)
+    {
+        for (int start = 0; start < text.Length;)
+        {
+            int length = Math.Min(limit, text.Length - start);
+            if (start + length < text.Length)
+            {
+                int boundary = text.LastIndexOf(' ', start + length - 1, length);
+                if (boundary > start + length / 2) length = boundary - start + 1;
+                if (char.IsHighSurrogate(text[start + length - 1])) length--;
+            }
+            yield return text.Substring(start, length);
+            start += length;
+        }
+    }
+
+    private async Task<WorkerResponse> ExecuteAsync(WorkerRequest request, TimeSpan timeout, CancellationToken token)
+    {
+        if (request.Kind == "selection")
+        {
+            var result = await selection.ReadAsync(request, timeout, token);
+            if (result.Error != ErrorCode.None) throw new QuietException(result.Error);
+            return result;
+        }
+        if (request.Kind is "speak" or "synthesize-test")
+            foreach (var pair in additional)
+                if (request.VoiceId.StartsWith(pair.Key.ToString().ToLowerInvariant() + ":", StringComparison.Ordinal))
+                {
+                    if (residentAdditionalIds.Contains(request.VoiceId)) return await pair.Value.CallAsync(request, timeout, token);
+                    using var cold = new Speech.PythonSpeechClient(pair.Key);
+                    return await cold.CallAsync(request, timeout, token);
+                }
+        if (request.Kind is "speak" or "synthesize-test" && request.VoiceId.StartsWith("silero:", StringComparison.Ordinal))
+        {
+            if (residentSileroIds.Contains(request.VoiceId)) return await silero.CallAsync(request, timeout, token);
+            using var cold = new Speech.SileroClient();
+            return await cold.CallAsync(request, timeout, token);
+        }
+        if (request.Kind is "speak" or "synthesize-test" && request.VoiceId.StartsWith("piper:", StringComparison.Ordinal))
+        {
+            if (residentVoiceIds.Contains(request.VoiceId)) return await piper.CallAsync(request, timeout, token);
+            using var cold = new Speech.PiperClient();
+            return await cold.CallAsync(request, timeout, token);
+        }
+        var name = "QuietSelection-" + Guid.NewGuid().ToString("N");
+        await using var pipe = new NamedPipeServerStream(name, PipeDirection.InOut, 1, PipeTransmissionMode.Byte,
+            PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
+        deadline.CancelAfter(timeout);
+        using var process = new Process { StartInfo = new(Environment.ProcessPath!) { UseShellExecute = false, CreateNoWindow = true } };
+        if (string.Equals(Path.GetFileNameWithoutExtension(Environment.ProcessPath), "dotnet", StringComparison.OrdinalIgnoreCase))
+            process.StartInfo.ArgumentList.Add(typeof(WorkerClient).Assembly.Location);
+        process.StartInfo.ArgumentList.Add("--worker");
+        process.StartInfo.ArgumentList.Add(name);
+        process.Start();
+        WorkerJob job;
+        try { job = new WorkerJob(process.Handle); }
+        catch { if (!process.HasExited) process.Kill(); throw; }
+        using var processLifetime = job;
+        bool sourceChanged = false;
+        using var focusCancellation = new CancellationTokenSource();
+        bool guardForeground = request.Kind is "selection" or "ocr";
+        var watch = guardForeground ? Task.Run(async () =>
+        {
+            try
+            {
+                while (!focusCancellation.IsCancellationRequested)
+                {
+                    if (NativeMethods.GetForegroundWindow() != (nint)request.SourceWindow)
+                    { sourceChanged = true; deadline.Cancel(); break; }
+                    await Task.Delay(30, focusCancellation.Token);
+                }
+            }
+            catch (OperationCanceledException) { }
+        }) : Task.CompletedTask;
+        try
+        {
+            await pipe.WaitForConnectionAsync(deadline.Token);
+            await WorkerProtocol.WriteAsync(pipe, request, deadline.Token);
+            var result = await WorkerProtocol.ReadAsync<WorkerResponse>(pipe, deadline.Token);
+            token.ThrowIfCancellationRequested();
+            if (guardForeground && NativeMethods.GetForegroundWindow() != (nint)request.SourceWindow)
+                throw new QuietException(ErrorCode.SourceChanged);
+            if (result.Error != ErrorCode.None) throw new QuietException(result.Error);
+            return result;
+        }
+        catch (OperationCanceledException) when (!token.IsCancellationRequested)
+        {
+            throw new QuietException(sourceChanged ? ErrorCode.SourceChanged :
+                request.Kind == "selection" ? ErrorCode.SelectionTimeout : ErrorCode.WorkerFailure);
+        }
+        finally
+        {
+            focusCancellation.Cancel();
+            await watch;
+            if (!process.HasExited) process.Kill(entireProcessTree: true);
+            await process.WaitForExitAsync(CancellationToken.None);
+        }
+    }
+}

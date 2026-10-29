@@ -1,0 +1,44 @@
+{
+  "Version": "0.16.4",
+  "ReleaseUrl": "https://github.com/VOICEVOX/voicevox_vvm/releases/tag/0.16.4",
+  "Files": [
+    {
+      "Name": "0.vvm",
+      "Bytes": 58214379,
+      "Sha256": "917e592cae92a02fb7668bd9e168df4e39c8ab2f5302c2be71906c70ec4e2df2",
+      "Url": "https://github.com/VOICEVOX/voicevox_vvm/releases/download/0.16.4/0.vvm"
+    },
+    {
+      "Name": "4.vvm",
+      "Bytes": 58211265,
+      "Sha256": "da5aaad87d5b7ea5b346def2e610cc63e64a90088bb0fc2d27fb63a622113953",
+      "Url": "https://github.com/VOICEVOX/voicevox_vvm/releases/download/0.16.4/4.vvm"
+    },
+    {
+      "Name": "README.txt",
+      "Bytes": 27238,
+      "Sha256": "12a64121db0815fc5e6ea8cdf13cd3ed052b7c7d7a170a70a2c0eced2fc63573",
+      "Url": "https://github.com/VOICEVOX/voicevox_vvm/releases/download/0.16.4/README.txt"
+    },
+    {
+      "Name": "TERMS.txt",
+      "Bytes": 15667,
+      "Sha256": "57fc18afeebc8a08c303b2b4e3f05bf6453a37c482d17c04ec3fbc674e5fc5f4",
+      "Url": "https://github.com/VOICEVOX/voicevox_vvm/releases/download/0.16.4/TERMS.txt"
+    }
+  ],
+  "SelectedStyles": [
+    {
+      "Name": "四国めたん",
+      "Style": "ノーマル",
+      "StyleId": 2,
+      "Model": "0.vvm"
+    },
+    {
+      "Name": "玄野武宏",
+      "Style": "ノーマル",
+      "StyleId": 11,
+      "Model": "4.vvm"
+    }
+  ]
+}

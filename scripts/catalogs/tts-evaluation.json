@@ -1,0 +1,237 @@
+{
+  "Purpose": "Approved sequential model downloads; promoted application catalogs are in src/QuietSelection.App/Speech/Downloads.",
+  "Models": [
+    {
+      "Name": "Kitten Mini 0.8",
+      "CacheDirectory": "kitten-mini-downloads",
+      "License": "Apache-2.0",
+      "Files": [
+        {
+          "Name": "kitten_tts_mini_v0_8.onnx",
+          "Bytes": 78268016,
+          "Sha256": "0f5bbae4fc4800c98dbc544a87ecfa79510de2fb8222db30d12e5bfe9177df91",
+          "GitBlob": null,
+          "Url": "https://huggingface.co/KittenML/kitten-tts-mini-0.8/resolve/c02725660cea441db4c383af69f1f26f5cd00947/kitten_tts_mini_v0_8.onnx"
+        },
+        {
+          "Name": "voices.npz",
+          "Bytes": 3278902,
+          "Sha256": "40ad2638952b77b7b2f30127e2608e169fc69dd256b53bd8aaa3409a33193c42",
+          "GitBlob": null,
+          "Url": "https://huggingface.co/KittenML/kitten-tts-mini-0.8/resolve/c02725660cea441db4c383af69f1f26f5cd00947/voices.npz"
+        },
+        {
+          "Name": "config.json",
+          "Bytes": 470,
+          "Sha256": null,
+          "GitBlob": "1c247a4445ee41f5639d79a9fc3e198971d7ee06",
+          "Url": "https://huggingface.co/KittenML/kitten-tts-mini-0.8/resolve/c02725660cea441db4c383af69f1f26f5cd00947/config.json"
+        },
+        {
+          "Name": "README.md",
+          "Bytes": 734,
+          "Sha256": null,
+          "GitBlob": "b886efc3f2b8bad2d3c98872ec3429ee1e28b9e7",
+          "Url": "https://huggingface.co/KittenML/kitten-tts-mini-0.8/resolve/c02725660cea441db4c383af69f1f26f5cd00947/README.md"
+        }
+      ]
+    },
+    {
+      "Name": "Pocket TTS English 2026-09_2",
+      "CacheDirectory": "pocket-tts-downloads",
+      "License": "CC-BY-4.0 (model), MIT (code), per-voice terms in upstream voice repository",
+      "CodeRevision": "9aa7a7f0e52a4cd81bcf8a0fc7c981cdc6d11e53",
+      "Files": [
+        {
+          "Name": "model.safetensors",
+          "Bytes": 219029196,
+          "Sha256": "e106c451108e066119f070eb7cf6c9ff4a2ad93f3bf04c9914cc94c66b7a4eeb",
+          "GitBlob": null,
+          "Url": "https://huggingface.co/kyutai/pocket-tts-without-voice-cloning/resolve/575d14372df89a4534bcb989870a34e77544b09f/languages/english/model.safetensors"
+        },
+        {
+          "Name": "tokenizer.json",
+          "Bytes": 245020,
+          "Sha256": null,
+          "GitBlob": "fe3e7fe6185e4a3bc218fa8f5ed993ecb098201c",
+          "Url": "https://huggingface.co/kyutai/pocket-tts-without-voice-cloning/resolve/00eac05ed3d16bdc3f6b5d598874019c34a89214/languages/english/tokenizer.json"
+        },
+        {
+          "Name": "voices/alba.safetensors",
+          "Bytes": 6244152,
+          "Sha256": "4206b7194018c7e345e5cfd99f147caad36285df858ea153d0188c40d9f261e5",
+          "GitBlob": null,
+          "Url": "https://huggingface.co/kyutai/pocket-tts-without-voice-cloning/resolve/ab248779e0718743c013e20b2d812ace7c8f4bf7/languages/english/embeddings/alba.safetensors"
+        },
+        {
+          "Name": "voices/anna.safetensors",
+          "Bytes": 7620408,
+          "Sha256": "4f1a928fc92ae04367324cc5d880745c1e6680bd56bf99e5d26a1e80c2cff421",
+          "GitBlob": null,
+          "Url": "https://huggingface.co/kyutai/pocket-tts-without-voice-cloning/resolve/ab248779e0718743c013e20b2d812ace7c8f4bf7/languages/english/embeddings/anna.safetensors"
+        },
+        {
+          "Name": "voices/azelma.safetensors",
+          "Bytes": 7178040,
+          "Sha256": "cc09e106a1acf5fe0b4c5de61b2b7686080b7bab853f9c11bfef219801bf3126",
+          "GitBlob": null,
+          "Url": "https://huggingface.co/kyutai/pocket-tts-without-voice-cloning/resolve/ab248779e0718743c013e20b2d812ace7c8f4bf7/languages/english/embeddings/azelma.safetensors"
+        },
+        {
+          "Name": "voices/bill_boerst.safetensors",
+          "Bytes": 6539064,
+          "Sha256": "063b245f60f682a2403e4c61d2e8754e0a2916d75b2cd515cc97355a9e7a10a8",
+          "GitBlob": null,
+          "Url": "https://huggingface.co/kyutai/pocket-tts-without-voice-cloning/resolve/ab248779e0718743c013e20b2d812ace7c8f4bf7/languages/english/embeddings/bill_boerst.safetensors"
+        },
+        {
+          "Name": "voices/caro_davy.safetensors",
+          "Bytes": 5064504,
+          "Sha256": "971a47f7e655e4e377915b2862f2b1242aa4f27659ed936c85387bc2dfe17595",
+          "GitBlob": null,
+          "Url": "https://huggingface.co/kyutai/pocket-tts-without-voice-cloning/resolve/ab248779e0718743c013e20b2d812ace7c8f4bf7/languages/english/embeddings/caro_davy.safetensors"
+        },
+        {
+          "Name": "voices/charles.safetensors",
+          "Bytes": 6195000,
+          "Sha256": "21806203b56a8ee954b66a33fcdea636c67cd54760f20f12f7586062d9455337",
+          "GitBlob": null,
+          "Url": "https://huggingface.co/kyutai/pocket-tts-without-voice-cloning/resolve/ab248779e0718743c013e20b2d812ace7c8f4bf7/languages/english/embeddings/charles.safetensors"
+        },
+        {
+          "Name": "voices/cosette.safetensors",
+          "Bytes": 6244152,
+          "Sha256": "ee63b91d4614e939fa5eb24df8c43de367c552dfd60c1c6b61582a859e25298a",
+          "GitBlob": null,
+          "Url": "https://huggingface.co/kyutai/pocket-tts-without-voice-cloning/resolve/ab248779e0718743c013e20b2d812ace7c8f4bf7/languages/english/embeddings/cosette.safetensors"
+        },
+        {
+          "Name": "voices/eponine.safetensors",
+          "Bytes": 6932280,
+          "Sha256": "897d1d697e433f4ac1f0a8957fd2d69b073e316935c681fe488a7bf63a2b9a7b",
+          "GitBlob": null,
+          "Url": "https://huggingface.co/kyutai/pocket-tts-without-voice-cloning/resolve/ab248779e0718743c013e20b2d812ace7c8f4bf7/languages/english/embeddings/eponine.safetensors"
+        },
+        {
+          "Name": "voices/eve.safetensors",
+          "Bytes": 6145848,
+          "Sha256": "d31289743fdf306517925afb91e99c27b4d336c127013d2c4d1212791a41cf37",
+          "GitBlob": null,
+          "Url": "https://huggingface.co/kyutai/pocket-tts-without-voice-cloning/resolve/ab248779e0718743c013e20b2d812ace7c8f4bf7/languages/english/embeddings/eve.safetensors"
+        },
+        {
+          "Name": "voices/fantine.safetensors",
+          "Bytes": 6440760,
+          "Sha256": "a1803e41334934b199f4c7a2a4cec1069a75c0b3cb100e3cc3b5e76f0b07dd9e",
+          "GitBlob": null,
+          "Url": "https://huggingface.co/kyutai/pocket-tts-without-voice-cloning/resolve/ab248779e0718743c013e20b2d812ace7c8f4bf7/languages/english/embeddings/fantine.safetensors"
+        },
+        {
+          "Name": "voices/george.safetensors",
+          "Bytes": 5900088,
+          "Sha256": "fc5ff4439cbbb532b69d2762524b55844e03352102f13376f2fa00443bc04090",
+          "GitBlob": null,
+          "Url": "https://huggingface.co/kyutai/pocket-tts-without-voice-cloning/resolve/ab248779e0718743c013e20b2d812ace7c8f4bf7/languages/english/embeddings/george.safetensors"
+        },
+        {
+          "Name": "voices/jane.safetensors",
+          "Bytes": 7325496,
+          "Sha256": "495ff63b1757ceb68a7a8e2d369b780e9d60dcd98a25ef784e246c65c9af4d90",
+          "GitBlob": null,
+          "Url": "https://huggingface.co/kyutai/pocket-tts-without-voice-cloning/resolve/ab248779e0718743c013e20b2d812ace7c8f4bf7/languages/english/embeddings/jane.safetensors"
+        },
+        {
+          "Name": "voices/jean.safetensors",
+          "Bytes": 6096696,
+          "Sha256": "2d720746d3f2ec131b4dd67c0b101af7a7006798511bb975c707788e9a2467fc",
+          "GitBlob": null,
+          "Url": "https://huggingface.co/kyutai/pocket-tts-without-voice-cloning/resolve/ab248779e0718743c013e20b2d812ace7c8f4bf7/languages/english/embeddings/jean.safetensors"
+        },
+        {
+          "Name": "voices/javert.safetensors",
+          "Bytes": 6145848,
+          "Sha256": "f60f4603404152370ae5ad4d01fa9ad3e1afd3a5df6122aa3dd88ed95fbfd6f8",
+          "GitBlob": null,
+          "Url": "https://huggingface.co/kyutai/pocket-tts-without-voice-cloning/resolve/ab248779e0718743c013e20b2d812ace7c8f4bf7/languages/english/embeddings/javert.safetensors"
+        },
+        {
+          "Name": "voices/marius.safetensors",
+          "Bytes": 6244152,
+          "Sha256": "6fd2496993221be51edc027820fa465b67221d7e369b8caeab40076040d561dd",
+          "GitBlob": null,
+          "Url": "https://huggingface.co/kyutai/pocket-tts-without-voice-cloning/resolve/ab248779e0718743c013e20b2d812ace7c8f4bf7/languages/english/embeddings/marius.safetensors"
+        },
+        {
+          "Name": "voices/mary.safetensors",
+          "Bytes": 5949240,
+          "Sha256": "f05824557190fe66e39837337d65c6c400aa54920bae316e1245eeb4cd447b8b",
+          "GitBlob": null,
+          "Url": "https://huggingface.co/kyutai/pocket-tts-without-voice-cloning/resolve/ab248779e0718743c013e20b2d812ace7c8f4bf7/languages/english/embeddings/mary.safetensors"
+        },
+        {
+          "Name": "voices/michael.safetensors",
+          "Bytes": 7128888,
+          "Sha256": "188f29bf53aca645d77accd44455b494a28e17d94b1658fbaec80f679371ad13",
+          "GitBlob": null,
+          "Url": "https://huggingface.co/kyutai/pocket-tts-without-voice-cloning/resolve/ab248779e0718743c013e20b2d812ace7c8f4bf7/languages/english/embeddings/michael.safetensors"
+        },
+        {
+          "Name": "voices/paul.safetensors",
+          "Bytes": 6833976,
+          "Sha256": "02b77e48b791c7ece818d7f85b98459bc8dc035104e6327635053ffb56898050",
+          "GitBlob": null,
+          "Url": "https://huggingface.co/kyutai/pocket-tts-without-voice-cloning/resolve/ab248779e0718743c013e20b2d812ace7c8f4bf7/languages/english/embeddings/paul.safetensors"
+        },
+        {
+          "Name": "voices/peter_yearsley.safetensors",
+          "Bytes": 3639088,
+          "Sha256": "7410cc6531929ea0ea7daa3a3f083a78239701df31acc60583172585a9304c3e",
+          "GitBlob": null,
+          "Url": "https://huggingface.co/kyutai/pocket-tts-without-voice-cloning/resolve/ab248779e0718743c013e20b2d812ace7c8f4bf7/languages/english/embeddings/peter_yearsley.safetensors"
+        },
+        {
+          "Name": "voices/stuart_bell.safetensors",
+          "Bytes": 5064504,
+          "Sha256": "6ccec2880941cd132a9997798c8b0350d3dd547c890e45024873a85b017e5b39",
+          "GitBlob": null,
+          "Url": "https://huggingface.co/kyutai/pocket-tts-without-voice-cloning/resolve/ab248779e0718743c013e20b2d812ace7c8f4bf7/languages/english/embeddings/stuart_bell.safetensors"
+        },
+        {
+          "Name": "voices/vera.safetensors",
+          "Bytes": 6686520,
+          "Sha256": "6deb7eb7606810edbba1c9639376d6750a8f441e464e279c43341debf5c29765",
+          "GitBlob": null,
+          "Url": "https://huggingface.co/kyutai/pocket-tts-without-voice-cloning/resolve/ab248779e0718743c013e20b2d812ace7c8f4bf7/languages/english/embeddings/vera.safetensors"
+        },
+        {
+          "Name": "README.md",
+          "Bytes": 26699,
+          "Sha256": null,
+          "GitBlob": "4ff581a76fd0820a4789352cd59c522093dbdbc8",
+          "Url": "https://huggingface.co/kyutai/pocket-tts-without-voice-cloning/resolve/575d14372df89a4534bcb989870a34e77544b09f/README.md"
+        },
+        {
+          "Name": "english-upstream.yaml",
+          "Bytes": 1546,
+          "Sha256": null,
+          "GitBlob": "3cfe0b69f765755f1f4e7eab1196a559c2e94824",
+          "Url": "https://raw.githubusercontent.com/kyutai-labs/pocket-tts/9aa7a7f0e52a4cd81bcf8a0fc7c981cdc6d11e53/pocket_tts/config/english.yaml"
+        },
+        {
+          "Name": "CODE-LICENSE.txt",
+          "Bytes": 1023,
+          "Sha256": null,
+          "GitBlob": "31aa79387f27e730e33d871925e152e35e428031",
+          "Url": "https://raw.githubusercontent.com/kyutai-labs/pocket-tts/9aa7a7f0e52a4cd81bcf8a0fc7c981cdc6d11e53/LICENSE"
+        },
+        {
+          "Name": "pyproject-upstream.toml",
+          "Bytes": 2520,
+          "Sha256": null,
+          "GitBlob": "0c886d02fd94b44e6ee50e03c31909f56f9c698d",
+          "Url": "https://raw.githubusercontent.com/kyutai-labs/pocket-tts/9aa7a7f0e52a4cd81bcf8a0fc7c981cdc6d11e53/pyproject.toml"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,107 @@
+[
+  {
+    "Voice": "alba",
+    "Source": "hf://kyutai/tts-voices/alba-mackenna/casual.wav",
+    "License": "CC-BY-4.0"
+  },
+  {
+    "Voice": "anna",
+    "Source": "hf://kyutai/tts-voices/vctk/p228_023_enhanced.wav",
+    "License": "CC-BY-4.0"
+  },
+  {
+    "Voice": "azelma",
+    "Source": "hf://kyutai/tts-voices/vctk/p303_023_enhanced.wav",
+    "License": "CC-BY-4.0"
+  },
+  {
+    "Voice": "bill_boerst",
+    "Source": "hf://kyutai/tts-voices/voice-zero/bill_boerst.wav",
+    "License": "CC0-1.0"
+  },
+  {
+    "Voice": "caro_davy",
+    "Source": "hf://kyutai/tts-voices/voice-zero/caro_davy.wav",
+    "License": "CC0-1.0"
+  },
+  {
+    "Voice": "charles",
+    "Source": "hf://kyutai/tts-voices/vctk/p254_023_enhanced.wav",
+    "License": "CC-BY-4.0"
+  },
+  {
+    "Voice": "cosette",
+    "Source": "hf://kyutai/tts-voices/expresso/ex04-ex02_confused_001_channel1_499s.wav",
+    "License": "CC-BY-NC-4.0"
+  },
+  {
+    "Voice": "eponine",
+    "Source": "hf://kyutai/tts-voices/vctk/p262_023_enhanced.wav",
+    "License": "CC-BY-4.0"
+  },
+  {
+    "Voice": "eve",
+    "Source": "hf://kyutai/tts-voices/vctk/p361_023_enhanced.wav",
+    "License": "CC-BY-4.0"
+  },
+  {
+    "Voice": "fantine",
+    "Source": "hf://kyutai/tts-voices/vctk/p244_023_enhanced.wav",
+    "License": "CC-BY-4.0"
+  },
+  {
+    "Voice": "george",
+    "Source": "hf://kyutai/tts-voices/vctk/p315_023_enhanced.wav",
+    "License": "CC-BY-4.0"
+  },
+  {
+    "Voice": "jane",
+    "Source": "hf://kyutai/tts-voices/vctk/p339_023_enhanced.wav",
+    "License": "CC-BY-4.0"
+  },
+  {
+    "Voice": "jean",
+    "Source": "hf://kyutai/tts-voices/ears/p010/freeform_speech_01_enhanced.wav",
+    "License": "CC-BY-NC-4.0"
+  },
+  {
+    "Voice": "javert",
+    "Source": "hf://kyutai/tts-voices/voice-donations/Butter.wav",
+    "License": "CC0-1.0"
+  },
+  {
+    "Voice": "marius",
+    "Source": "hf://kyutai/tts-voices/voice-donations/Selfie.wav",
+    "License": "CC0-1.0"
+  },
+  {
+    "Voice": "mary",
+    "Source": "hf://kyutai/tts-voices/vctk/p333_023_enhanced.wav",
+    "License": "CC-BY-4.0"
+  },
+  {
+    "Voice": "michael",
+    "Source": "hf://kyutai/tts-voices/vctk/p360_023_enhanced.wav",
+    "License": "CC-BY-4.0"
+  },
+  {
+    "Voice": "paul",
+    "Source": "hf://kyutai/tts-voices/vctk/p259_023_enhanced.wav",
+    "License": "CC-BY-4.0"
+  },
+  {
+    "Voice": "peter_yearsley",
+    "Source": "hf://kyutai/tts-voices/voice-zero/peter_yearsley.wav",
+    "License": "CC0-1.0"
+  },
+  {
+    "Voice": "stuart_bell",
+    "Source": "hf://kyutai/tts-voices/voice-zero/stuart_bell.wav",
+    "License": "CC0-1.0"
+  },
+  {
+    "Voice": "vera",
+    "Source": "hf://kyutai/tts-voices/vctk/p229_023_enhanced.wav",
+    "License": "CC-BY-4.0"
+  }
+]

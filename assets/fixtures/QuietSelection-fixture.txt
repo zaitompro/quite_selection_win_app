@@ -1,0 +1,4 @@
+QuietSelection: synthetic text for local acceptance testing.
+Это тестовый абзац для проверки выделения.
+これは読み上げのテストです。
+Привет мир! Hello world. こんにちは。

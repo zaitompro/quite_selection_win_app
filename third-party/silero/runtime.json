@@ -1,0 +1,62 @@
+[
+  {
+    "Name": "torch-2.14.1+cpu-cp313-cp313-win_amd64.whl",
+    "Bytes": 123995848,
+    "Sha256": "4eec5a4fadd7a18f9c75b97fdb374fbb579ce4b1604bf66eeb14dc2201d54def",
+    "Url": "https://download-r2.pytorch.org/whl/cpu/torch-2.14.1%2Bcpu-cp313-cp313-win_amd64.whl"
+  },
+  {
+    "Name": "filelock-4.2.4-py3-none-any.whl",
+    "Bytes": 162475,
+    "Sha256": "301241438c57936ef93f4243a94f2559022268bfcf9b375a9a72eb0f8db8358e",
+    "Url": "https://files.pythonhosted.org/packages/e0/1b/5e74289a1878e666bb4b65fe5805a04cafcac2aa5f519ef1ead67ef91c56/filelock-4.2.4-py3-none-any.whl"
+  },
+  {
+    "Name": "typing_extensions-4.16.0-py3-none-any.whl",
+    "Bytes": 45571,
+    "Sha256": "481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8",
+    "Url": "https://files.pythonhosted.org/packages/49/d3/b8441a820a491ddfc024b0b0cf0393375b75ea13866d9c66727e54c2fc80/typing_extensions-4.16.0-py3-none-any.whl"
+  },
+  {
+    "Name": "setuptools-84.0.0-py3-none-any.whl",
+    "Bytes": 818216,
+    "Sha256": "51a52592b3b99e102b609654876bd65f19f999935166d1352678931132b0c670",
+    "Url": "https://files.pythonhosted.org/packages/95/9c/c510029fc6ef33a6275cd2c5d3cecd6613dfd6aa401d57c54f1c18852ccf/setuptools-84.0.0-py3-none-any.whl"
+  },
+  {
+    "Name": "sympy-1.14.0-py3-none-any.whl",
+    "Bytes": 6299353,
+    "Sha256": "e091cc3e99d2141a0ba2847328f5479b05d94a6635cb96148ccb3f34671bd8f5",
+    "Url": "https://files.pythonhosted.org/packages/a2/09/77d55d46fd61b4a135c444fc97158ef34a095e5681d0a6c10b75bf356191/sympy-1.14.0-py3-none-any.whl"
+  },
+  {
+    "Name": "networkx-3.7-py3-none-any.whl",
+    "Bytes": 2142205,
+    "Sha256": "e3fd2c13a7814cee3746340d8d7f8598a67f16a58bf47fb7f8793fab6efca1b0",
+    "Url": "https://files.pythonhosted.org/packages/7e/cd/fe58041e9011f307c490e3e17dd48cc516448f7c698a3f2d9d9d65d7e6a8/networkx-3.7-py3-none-any.whl"
+  },
+  {
+    "Name": "jinja2-3.1.6-py3-none-any.whl",
+    "Bytes": 134899,
+    "Sha256": "85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67",
+    "Url": "https://files.pythonhosted.org/packages/62/a1/3d680cbfd5f4b8f15abc1d571870c5fc3e594bb582bc3b64ea099db13e56/jinja2-3.1.6-py3-none-any.whl"
+  },
+  {
+    "Name": "fsspec-2026.9.0-py3-none-any.whl",
+    "Bytes": 221738,
+    "Sha256": "8dd6e646e99ea382bd85f97a45e6b526a442d79423a7dc673f1e2756d05fcb5f",
+    "Url": "https://files.pythonhosted.org/packages/6c/c0/a98505f18594f1bce828bb159cec0fcf9860562f1a2c85913409fc8f3d9e/fsspec-2026.9.0-py3-none-any.whl"
+  },
+  {
+    "Name": "mpmath-1.3.0-py3-none-any.whl",
+    "Bytes": 536198,
+    "Sha256": "a0b2b9fe80bbcd81a6647ff13108738cfb482d481d826cc0e02f5b35e5c88d2c",
+    "Url": "https://files.pythonhosted.org/packages/43/e3/7d92a15f894aa0c9c4b49b8ee9ac9850d6e63b03c9c32c0367a13ae62209/mpmath-1.3.0-py3-none-any.whl"
+  },
+  {
+    "Name": "markupsafe-3.0.4-cp313-cp313-win_amd64.whl",
+    "Bytes": 14313,
+    "Sha256": "1f1f9477e174582b0a1b583d60b66e1f2cf5d3fe12cee985e4aedf44766600e5",
+    "Url": "https://files.pythonhosted.org/packages/6f/36/163da64de88a13db79214ef75fa041be7fa13bdb42261cf5b7484de14bfb/markupsafe-3.0.4-cp313-cp313-win_amd64.whl"
+  }
+]

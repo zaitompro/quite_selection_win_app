@@ -1,0 +1,18 @@
+[
+  {
+    "Language": "ru", "Name": "Elena", "Version": "4.3.2017.22",
+    "FileName": "RHVoice-voice-Russian-Elena-v4.3.2017.22-setup.exe",
+    "Url": "https://github.com/RHVoice/elena-rus/releases/download/v4.3/RHVoice-voice-Russian-Elena-v4.3.2017.22-setup.exe",
+    "Bytes": 8228573,
+    "Sha256": "23e1301869e842f8f91fe64cc34533f9996724ec609962a24e6d5dee7828b643",
+    "License": "GPL v3", "Source": "https://github.com/RHVoice/elena-rus"
+  },
+  {
+    "Language": "en", "Name": "SLT", "Version": "4.1.2017.22",
+    "FileName": "RHVoice-voice-English-Slt-v4.1.2017.22-setup.exe",
+    "Url": "https://github.com/RHVoice/slt-eng/releases/download/4.1/RHVoice-voice-English-Slt-v4.1.2017.22-setup.exe",
+    "Bytes": 7714064,
+    "Sha256": "bb7198123fbd29e45bcfb08a4c3c7783360baf5b04db1d6d18cc20c834dfa962",
+    "License": "CMU license", "Source": "https://github.com/RHVoice/slt-eng"
+  }
+]

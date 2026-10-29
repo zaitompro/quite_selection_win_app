@@ -1,0 +1,38 @@
+[
+  {
+    "Name": "piper_tts-1.8.0-cp39-abi3-win_amd64.whl",
+    "Bytes": 34119688,
+    "Sha256": "5da9bfdb05dfe15da3536859d422e605483ffa6d2b3ec2c5b9593bae6b5aa6a4",
+    "Url": "https://files.pythonhosted.org/packages/12/9c/c736d1961cf9ce0655278731b9430df41892ca2ded7b09dabcb340612158/piper_tts-1.8.0-cp39-abi3-win_amd64.whl"
+  },
+  {
+    "Name": "onnxruntime-1.31.0-cp313-cp313-win_amd64.whl",
+    "Bytes": 14888306,
+    "Sha256": "73e0165d58ece068c2a8a1c477c90b38e5a8adbbd399fdfdfd4bd79cbc28ff8d",
+    "Url": "https://files.pythonhosted.org/packages/c4/86/05ed2056f43b27aaf12ebc592ebd9037a26bed315958cf882f43425fd469/onnxruntime-1.31.0-cp313-cp313-win_amd64.whl"
+  },
+  {
+    "Name": "pathvalidate-3.3.1-py3-none-any.whl",
+    "Bytes": 24305,
+    "Sha256": "5263baab691f8e1af96092fa5137ee17df5bdfbd6cff1fcac4d6ef4bc2e1735f",
+    "Url": "https://files.pythonhosted.org/packages/9a/70/875f4a23bfc4731703a5835487d0d2fb999031bd415e7d17c0ae615c18b7/pathvalidate-3.3.1-py3-none-any.whl"
+  },
+  {
+    "Name": "flatbuffers-25.12.19-py2.py3-none-any.whl",
+    "Bytes": 26661,
+    "Sha256": "7634f50c427838bb021c2d66a3d1168e9d199b0607e6329399f04846d42e20b4",
+    "Url": "https://files.pythonhosted.org/packages/e8/2d/d2a548598be01649e2d46231d151a6c56d10b964d94043a335ae56ea2d92/flatbuffers-25.12.19-py2.py3-none-any.whl"
+  },
+  {
+    "Name": "packaging-26.3-py3-none-any.whl",
+    "Bytes": 129956,
+    "Sha256": "d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c",
+    "Url": "https://files.pythonhosted.org/packages/63/34/ba1c580383c9eada3711951fef0795c80b829a078d72188184bcab9dd527/packaging-26.3-py3-none-any.whl"
+  },
+  {
+    "Name": "protobuf-7.36.2-cp310-abi3-win_amd64.whl",
+    "Bytes": 456514,
+    "Sha256": "a300819d441e078a5608c0d3c709796bb548136058fda017ae51d425b44fd353",
+    "Url": "https://files.pythonhosted.org/packages/8a/55/b77bda4e5e5f5971fb51b07663694690e9afdb9402136c16a522bd621cad/protobuf-7.36.2-cp310-abi3-win_amd64.whl"
+  }
+]

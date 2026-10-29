@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <PlatformTarget>x64</PlatformTarget>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AssemblyName>QuietSelection</AssemblyName>
+    <StartupObject>QuietSelection.App.Program</StartupObject>
+    <AppHostDotNetSearch>AppRelative;EnvironmentVariable</AppHostDotNetSearch>
+    <AppHostRelativeDotNet>runtime</AppHostRelativeDotNet>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Speech/Downloads/kokoro-models.json" LogicalName="QuietSelection.Kokoro.json" />
+    <EmbeddedResource Include="Speech/Downloads/voicevox-models.json" LogicalName="QuietSelection.Voicevox.json" />
+    <EmbeddedResource Include="Speech/Downloads/kitten-models.json" LogicalName="QuietSelection.Kitten.json" />
+    <EmbeddedResource Include="Speech/Downloads/pocket-models.json" LogicalName="QuietSelection.Pocket.json" />
+    <Content Include="Speech/Downloads/pocket-models.json" Link="speech/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="../../.tools/pocket-runtime/**/*" Exclude="../../.tools/pocket-runtime/**/__pycache__/**" Link="pocket-runtime/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="../../third-party/pocket/**/*" Link="third-party/pocket/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Speech/Downloads/kitten-models.json" Link="speech/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="../../third-party/kitten/**/*" Link="third-party/kitten/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Speech/Downloads/kokoro-models.json;Speech/Downloads/voicevox-models.json;Speech/Downloads/kokoro-config.json" Link="speech/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="../../.tools/voicevox-runtime/**/*" Link="voicevox-runtime/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="../../third-party/kokoro/**/*" Link="third-party/kokoro/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="../../third-party/voicevox/**/*" Link="third-party/voicevox/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <EmbeddedResource Include="Speech/Downloads/silero-english-model.json" LogicalName="QuietSelection.SileroEnglish.json" />
+    <Content Include="Speech/Downloads/silero-english-model.json" Link="speech/silero-english-model.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <EmbeddedResource Include="Speech/Downloads/silero-model.json" LogicalName="QuietSelection.Silero.json" />
+    <Content Include="Speech/Downloads/silero-model.json" Link="speech/silero-model.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="../../.tools/silero-runtime/**/*" Link="silero-runtime/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="../../third-party/silero/**/*" Link="third-party/silero/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <EmbeddedResource Include="Speech/Downloads/piper-models.json" LogicalName="QuietSelection.Piper.json" />
+    <Content Include="Speech/Downloads/piper-models.json" Link="speech/piper-models.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="../QuietSelection.Speech/*.py" Link="speech/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="../../.tools/piper-runtime/**/*" Link="piper-runtime/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="../../third-party/piper/**/*" Link="third-party/piper/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <EmbeddedResource Include="Speech/Downloads/rhvoice.json" LogicalName="QuietSelection.RhVoice.json" />
+    <EmbeddedResource Include="Translation/Downloads/models.json" LogicalName="QuietSelection.Models.json" />
+    <Content Include="../QuietSelection.Translation/*.py" Link="translation/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="../../.tools/translation-runtime/**/*" Link="translation-runtime/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="../../third-party/translation/**/*" Link="third-party/translation/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <RuntimeHostConfigurationOption Include="Switch.System.Windows.Appearance.DisableFluentThemeWindowBackdrop" Value="true" />
+    <ProjectReference Include="../QuietSelection.Core/QuietSelection.Core.csproj" />
+  </ItemGroup>
+  <Target Name="CopyNativeBridge" AfterTargets="Build">
+    <Copy SourceFiles="../../artifacts/native/$(Configuration)/QuietSelection.Native.dll" DestinationFolder="$(OutDir)" />
+  </Target>
+</Project>

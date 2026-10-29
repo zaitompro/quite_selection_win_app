@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <PlatformTarget>x64</PlatformTarget>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../QuietSelection.App/Platform/VoiceInstallation.cs" Link="VoiceInstallation.cs" />
+    <Compile Include="../QuietSelection.App/Speech/Downloads/RhVoiceInstallation.cs" Link="RhVoiceInstallation.cs" />
+    <EmbeddedResource Include="../QuietSelection.App/Speech/Downloads/rhvoice.json" LogicalName="QuietSelection.RhVoice.json" />
+  </ItemGroup>
+  <Target Name="CopyNativeBridge" AfterTargets="Build">
+    <Copy SourceFiles="../../artifacts/native/$(Configuration)/QuietSelection.Native.dll" DestinationFolder="$(OutDir)" />
+  </Target>
+</Project>

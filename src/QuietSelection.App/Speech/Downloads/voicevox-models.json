@@ -1,0 +1,34 @@
+{
+  "Files": [
+    {
+      "Name": "0.vvm",
+      "Bytes": 58214379,
+      "Sha256": "917e592cae92a02fb7668bd9e168df4e39c8ab2f5302c2be71906c70ec4e2df2",
+      "Url": "https://github.com/VOICEVOX/voicevox_vvm/releases/download/0.16.4/0.vvm"
+    },
+    {
+      "Name": "4.vvm",
+      "Bytes": 58211265,
+      "Sha256": "da5aaad87d5b7ea5b346def2e610cc63e64a90088bb0fc2d27fb63a622113953",
+      "Url": "https://github.com/VOICEVOX/voicevox_vvm/releases/download/0.16.4/4.vvm"
+    }
+  ],
+  "Voices": [
+    {
+      "Id": "voicevox:metan:normal",
+      "Speaker": "metan",
+      "Name": "VOICEVOX 四国めたん — обычный, женский",
+      "Language": "ja-JP",
+      "Model": "0.vvm",
+      "Style": 2
+    },
+    {
+      "Id": "voicevox:takehiro:normal",
+      "Speaker": "takehiro",
+      "Name": "VOICEVOX 玄野武宏 — обычный, мужской",
+      "Language": "ja-JP",
+      "Model": "4.vvm",
+      "Style": 11
+    }
+  ]
+}

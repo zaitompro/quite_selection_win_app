@@ -1,0 +1,155 @@
+[
+  {
+    "Name": "translate-en_ru-1_9.argosmodel",
+    "Bytes": 195746693,
+    "Sha256": "591d743ae103752b88ffc38785c50421320f4eff93c8967e0d3d2e14d4e27811",
+    "Url": "https://argos-net.com/v1/translate-en_ru-1_9.argosmodel",
+    "Files": [
+      {
+        "Path": "translate-en_ru-1_9/README.md",
+        "Bytes": 7704,
+        "Sha256": "ae9d1fa7d28837433eb979e5e442c3907fa84d10458ff9f3d23eb372bf0061cd"
+      },
+      {
+        "Path": "translate-en_ru-1_9/sentencepiece.model",
+        "Bytes": 943491,
+        "Sha256": "cdd7fd3f6b069cd1baa90d95682ec6851119ae0d734438ba85d3678b2f1e2a66"
+      },
+      {
+        "Path": "translate-en_ru-1_9/metadata.json",
+        "Bytes": 255,
+        "Sha256": "a40657925da1c25d98d8a6bc53c436a5b1179bd8771e016147d88587edf1b529"
+      },
+      {
+        "Path": "translate-en_ru-1_9/model/shared_vocabulary.json",
+        "Bytes": 1207938,
+        "Sha256": "5e39116c77f19b90841f9b0d0dbe4e38ecf6eadd43dff40ea1415104f441c720"
+      },
+      {
+        "Path": "translate-en_ru-1_9/model/model.bin",
+        "Bytes": 214346964,
+        "Sha256": "c262cce6a506447d4b3c7a899787694df13783340ba67f0df3ecbf046ae27924"
+      },
+      {
+        "Path": "translate-en_ru-1_9/model/config.json",
+        "Bytes": 188,
+        "Sha256": "3f1a3cc20b961c1fe0e6007e8ca663730c4a8b82fa54073fde03edf1402c6726"
+      }
+    ]
+  },
+  {
+    "Name": "translate-ja_en-1_1.argosmodel",
+    "Bytes": 117155716,
+    "Sha256": "623e3477959a815eb0a5ef53e09079ae8f1f9d3bbcd230473baf28c03fb83335",
+    "Url": "https://argos-net.com/v1/translate-ja_en-1_1.argosmodel",
+    "Files": [
+      {
+        "Path": "ja_en/sentencepiece.model",
+        "Bytes": 787932,
+        "Sha256": "af3f880c259f55c62ed6c77c1ebc3cf46d6a95cc7cd8e9fcc78ee75417b987ef"
+      },
+      {
+        "Path": "ja_en/model/model.bin",
+        "Bytes": 132573333,
+        "Sha256": "5d2ac0b0e427aa368b635812853a70b09976d2318bf889a9327488968b501c83"
+      },
+      {
+        "Path": "ja_en/model/shared_vocabulary.txt",
+        "Bytes": 400498,
+        "Sha256": "8e6872bdfa55e2d91334ec5cd24eb6dab86033129639b940c60cd955b0f7a8a7"
+      },
+      {
+        "Path": "ja_en/metadata.json",
+        "Bytes": 160,
+        "Sha256": "a1becb19cb8abfc25d15bd8978cf543215c596876fb4b6d5c2c2a50949ece416"
+      },
+      {
+        "Path": "ja_en/README.md",
+        "Bytes": 1810,
+        "Sha256": "7c90a273d8866a3039d083d1cb6968497273c8fa6a33d94f7525bc560d268187"
+      }
+    ]
+  },
+  {
+    "Name": "opus-2021-02-18.zip",
+    "Bytes": 288618087,
+    "Sha256": "ad601d0959cb408cf02e8c755c02b1dc0e67971ebac88c3b0c9645850617d0f3",
+    "Url": "https://object.pouta.csc.fi/Tatoeba-MT-models/jpn-rus/opus-2021-02-18.zip",
+    "Files": [
+      {
+        "Path": "ja_ru/LICENSE",
+        "Bytes": 18652,
+        "Sha256": "945fbcb37deca05bccd7c3ca0e261679f1f5373515504fdbad68f6f3cf6f49b9"
+      },
+      {
+        "Path": "ja_ru/model/config.json",
+        "Bytes": 231,
+        "Sha256": "95dabd564e6abdb470e95f9106766647d8dc59e1bc2a1517d292c0cee5ca5812"
+      },
+      {
+        "Path": "ja_ru/model/model.bin",
+        "Bytes": 82664477,
+        "Sha256": "42d489257bf77f1f600c394fe28eb0ccc74c702fc9afd93986e4f9bb4b41f041"
+      },
+      {
+        "Path": "ja_ru/model/shared_vocabulary.json",
+        "Bytes": 2525542,
+        "Sha256": "379d76a670d7ab3a39dafc7869ed2d4859ea93ae968ab2054493031eb10bdf43"
+      },
+      {
+        "Path": "ja_ru/README.md",
+        "Bytes": 761,
+        "Sha256": "2ed117782945e35f03938c053abf19e3c78440bb2ff82df991ca95022226218c"
+      },
+      {
+        "Path": "ja_ru/source.spm",
+        "Bytes": 838812,
+        "Sha256": "d4a4d020d47520b0bdf62319c7aa3399cdf94792b3ff2595f4787e7ca0a1bfbb"
+      },
+      {
+        "Path": "ja_ru/target.spm",
+        "Bytes": 1034727,
+        "Sha256": "4fa1758a75b25fa8a6ee8274fd374103c279939c463591919a80c38d72f570b4"
+      }
+    ],
+    "Converter": "marian-ja-ru-v1",
+    "SourceFiles": [
+      {
+        "Path": "ja_ru_source/opus.spm32k-spm32k.transformer-align.model1.npz.best-perplexity.npz",
+        "Bytes": 309794437,
+        "Sha256": "f68f3821c5433dde1f3e6f600aeb36eca81b2d2cea445248137c63840f52354c",
+        "ArchivePath": "opus.spm32k-spm32k.transformer-align.model1.npz.best-perplexity.npz"
+      },
+      {
+        "Path": "ja_ru_source/opus.spm32k-spm32k.vocab.yml",
+        "Bytes": 1333938,
+        "Sha256": "bec894b9cb9a461febef063af3548b8030a46fe8f1d4ab8c83bdc666cb8d53c4",
+        "ArchivePath": "opus.spm32k-spm32k.vocab.yml"
+      },
+      {
+        "Path": "ja_ru_source/source.spm",
+        "Bytes": 838812,
+        "Sha256": "d4a4d020d47520b0bdf62319c7aa3399cdf94792b3ff2595f4787e7ca0a1bfbb",
+        "ArchivePath": "source.spm"
+      },
+      {
+        "Path": "ja_ru_source/target.spm",
+        "Bytes": 1034727,
+        "Sha256": "4fa1758a75b25fa8a6ee8274fd374103c279939c463591919a80c38d72f570b4",
+        "ArchivePath": "target.spm"
+      },
+      {
+        "Path": "ja_ru_source/README.md",
+        "Bytes": 761,
+        "Sha256": "2ed117782945e35f03938c053abf19e3c78440bb2ff82df991ca95022226218c",
+        "ArchivePath": "README.md"
+      },
+      {
+        "Path": "ja_ru_source/LICENSE",
+        "Bytes": 18652,
+        "Sha256": "945fbcb37deca05bccd7c3ca0e261679f1f5373515504fdbad68f6f3cf6f49b9",
+        "ArchivePath": "LICENSE"
+      }
+    ]
+  }
+]

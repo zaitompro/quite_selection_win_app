@@ -1,0 +1,188 @@
+{
+  "Files": [
+    {
+      "Name": "kokoro-v1.0.int8.onnx",
+      "Bytes": 92361271,
+      "Sha256": "6e742170d309016e5891a994e1ce1559c702a2ccd0075e67ef7157974f6406cb",
+      "Url": "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.int8.onnx",
+      "PublisherDigest": false
+    },
+    {
+      "Name": "voices-v1.0.bin",
+      "Bytes": 28214398,
+      "Sha256": "bca610b8308e8d99f32e6fe4197e7ec01679264efed0cac9140fe9c29f1fbf7d",
+      "Url": "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin",
+      "PublisherDigest": false
+    }
+  ],
+  "Voices": [
+    {
+      "Id": "kokoro:af_alloy",
+      "Speaker": "af_alloy",
+      "Name": "Kokoro Alloy — женский (США)",
+      "Language": "en-US"
+    },
+    {
+      "Id": "kokoro:af_aoede",
+      "Speaker": "af_aoede",
+      "Name": "Kokoro Aoede — женский (США)",
+      "Language": "en-US"
+    },
+    {
+      "Id": "kokoro:af_bella",
+      "Speaker": "af_bella",
+      "Name": "Kokoro Bella — женский (США)",
+      "Language": "en-US"
+    },
+    {
+      "Id": "kokoro:af_heart",
+      "Speaker": "af_heart",
+      "Name": "Kokoro Heart — женский (США)",
+      "Language": "en-US"
+    },
+    {
+      "Id": "kokoro:af_jessica",
+      "Speaker": "af_jessica",
+      "Name": "Kokoro Jessica — женский (США)",
+      "Language": "en-US"
+    },
+    {
+      "Id": "kokoro:af_kore",
+      "Speaker": "af_kore",
+      "Name": "Kokoro Kore — женский (США)",
+      "Language": "en-US"
+    },
+    {
+      "Id": "kokoro:af_nicole",
+      "Speaker": "af_nicole",
+      "Name": "Kokoro Nicole — женский (США)",
+      "Language": "en-US"
+    },
+    {
+      "Id": "kokoro:af_nova",
+      "Speaker": "af_nova",
+      "Name": "Kokoro Nova — женский (США)",
+      "Language": "en-US"
+    },
+    {
+      "Id": "kokoro:af_river",
+      "Speaker": "af_river",
+      "Name": "Kokoro River — женский (США)",
+      "Language": "en-US"
+    },
+    {
+      "Id": "kokoro:af_sarah",
+      "Speaker": "af_sarah",
+      "Name": "Kokoro Sarah — женский (США)",
+      "Language": "en-US"
+    },
+    {
+      "Id": "kokoro:af_sky",
+      "Speaker": "af_sky",
+      "Name": "Kokoro Sky — женский (США)",
+      "Language": "en-US"
+    },
+    {
+      "Id": "kokoro:am_adam",
+      "Speaker": "am_adam",
+      "Name": "Kokoro Adam — мужской (США)",
+      "Language": "en-US"
+    },
+    {
+      "Id": "kokoro:am_echo",
+      "Speaker": "am_echo",
+      "Name": "Kokoro Echo — мужской (США)",
+      "Language": "en-US"
+    },
+    {
+      "Id": "kokoro:am_eric",
+      "Speaker": "am_eric",
+      "Name": "Kokoro Eric — мужской (США)",
+      "Language": "en-US"
+    },
+    {
+      "Id": "kokoro:am_fenrir",
+      "Speaker": "am_fenrir",
+      "Name": "Kokoro Fenrir — мужской (США)",
+      "Language": "en-US"
+    },
+    {
+      "Id": "kokoro:am_liam",
+      "Speaker": "am_liam",
+      "Name": "Kokoro Liam — мужской (США)",
+      "Language": "en-US"
+    },
+    {
+      "Id": "kokoro:am_michael",
+      "Speaker": "am_michael",
+      "Name": "Kokoro Michael — мужской (США)",
+      "Language": "en-US"
+    },
+    {
+      "Id": "kokoro:am_onyx",
+      "Speaker": "am_onyx",
+      "Name": "Kokoro Onyx — мужской (США)",
+      "Language": "en-US"
+    },
+    {
+      "Id": "kokoro:am_puck",
+      "Speaker": "am_puck",
+      "Name": "Kokoro Puck — мужской (США)",
+      "Language": "en-US"
+    },
+    {
+      "Id": "kokoro:am_santa",
+      "Speaker": "am_santa",
+      "Name": "Kokoro Santa — мужской (США)",
+      "Language": "en-US"
+    },
+    {
+      "Id": "kokoro:bf_alice",
+      "Speaker": "bf_alice",
+      "Name": "Kokoro Alice — женский (Великобритания)",
+      "Language": "en-GB"
+    },
+    {
+      "Id": "kokoro:bf_emma",
+      "Speaker": "bf_emma",
+      "Name": "Kokoro Emma — женский (Великобритания)",
+      "Language": "en-GB"
+    },
+    {
+      "Id": "kokoro:bf_isabella",
+      "Speaker": "bf_isabella",
+      "Name": "Kokoro Isabella — женский (Великобритания)",
+      "Language": "en-GB"
+    },
+    {
+      "Id": "kokoro:bf_lily",
+      "Speaker": "bf_lily",
+      "Name": "Kokoro Lily — женский (Великобритания)",
+      "Language": "en-GB"
+    },
+    {
+      "Id": "kokoro:bm_daniel",
+      "Speaker": "bm_daniel",
+      "Name": "Kokoro Daniel — мужской (Великобритания)",
+      "Language": "en-GB"
+    },
+    {
+      "Id": "kokoro:bm_fable",
+      "Speaker": "bm_fable",
+      "Name": "Kokoro Fable — мужской (Великобритания)",
+      "Language": "en-GB"
+    },
+    {
+      "Id": "kokoro:bm_george",
+      "Speaker": "bm_george",
+      "Name": "Kokoro George — мужской (Великобритания)",
+      "Language": "en-GB"
+    },
+    {
+      "Id": "kokoro:bm_lewis",
+      "Speaker": "bm_lewis",
+      "Name": "Kokoro Lewis — мужской (Великобритания)",
+      "Language": "en-GB"
+    }
+  ]
+}

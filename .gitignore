@@ -1,0 +1,12 @@
+.tools/
+.cache/
+artifacts/
+**/bin/
+**/obj/
+*.user
+*.suo
+local-settings/
+*.pfx
+*.p12
+__pycache__/
+*.pyc

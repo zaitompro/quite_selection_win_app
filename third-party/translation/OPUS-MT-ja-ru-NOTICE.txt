@@ -1,0 +1,18 @@
+Helsinki-NLP / OPUS-MT / Tatoeba Translation Challenge
+Japanese (jpn) to Russian (rus), opus-2021-02-18.zip, transformer-align.
+
+Original publisher and model:
+https://github.com/Helsinki-NLP/Tatoeba-Challenge/tree/master/models/jpn-rus
+https://object.pouta.csc.fi/Tatoeba-MT-models/jpn-rus/opus-2021-02-18.zip
+
+The LICENSE inside this original archive is Creative Commons Attribution
+4.0 International (CC BY 4.0), retained beside the installed model and in
+OPUS-MT-ja-ru-LICENSE.txt. License: https://creativecommons.org/licenses/by/4.0/
+The different license tag on a Hugging Face publication is not substituted
+for the license included in this archive.
+
+Changes in QuietSelection: weights converted from Marian to CTranslate2
+int8; preprocessing implemented in Python, with fullwidth digit 1 preserved
+as a digit instead of the quotation mark in the original preprocessing script.
+Separate original source and target SentencePiece models are retained.
+No endorsement by the original publisher is implied.

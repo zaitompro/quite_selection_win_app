@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/QuietSelection.Core/QuietSelection.Core.csproj" />
+    <Project Path="src/QuietSelection.App/QuietSelection.App.csproj" />
+    <Project Path="src/QuietSelection.Setup/QuietSelection.Setup.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/QuietSelection.Core.Tests/QuietSelection.Core.Tests.csproj" />
+  </Folder>
+</Solution>
