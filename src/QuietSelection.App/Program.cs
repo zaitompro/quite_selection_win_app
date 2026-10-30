@@ -37,6 +37,8 @@ internal static class Program
                     Speech.PiperChecks.Run(app, args);
                 else if (args.Contains("--api-tests") || args.Contains("--selection-tests"))
                     IntegrationChecks.Run(app, args);
+                else if (args.Contains("--ocr-tests"))
+                    OcrChecks.Run(app, args);
                 else if (args.Contains("--translation-tests"))
                     Translation.TranslationChecks.Run(app, args);
                 else

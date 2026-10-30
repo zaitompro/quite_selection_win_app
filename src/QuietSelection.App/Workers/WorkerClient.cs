@@ -114,6 +114,11 @@ internal sealed class WorkerClient(IReadOnlyDictionary<Speech.SpeechEngine, stri
                 foreach (var segment in LanguagePlanner.BatchForPrefetch(segments))
                 {
                     var (client, resident) = Route(segment.VoiceId);
+                    // A voice that is not kept loaded must not unload the engine's selected voices:
+                    // it runs in its own short-lived worker (for example, a preview while browsing voices).
+                    PythonSpeechClient? cold = null;
+                    if (client is not null && !resident && HasResident(segment.VoiceId) && SpeechEngines.FromVoiceId(segment.VoiceId) is { } engine)
+                        client = cold = new PythonSpeechClient(engine, modelRoots?.GetValueOrDefault(engine));
                     try
                     {
                         foreach (var part in BoundRequests(segment.Text, client is null ? NativeRequestCharacters : 1000))
@@ -139,7 +144,8 @@ internal sealed class WorkerClient(IReadOnlyDictionary<Speech.SpeechEngine, stri
                     }
                     finally
                     {
-                        if (client is not null && !resident) await client.ResetAsync(CancellationToken.None);
+                        if (cold is not null) cold.Dispose();
+                        else if (client is not null && !resident) await client.ResetAsync(CancellationToken.None);
                     }
                 }
             }
@@ -163,6 +169,15 @@ internal sealed class WorkerClient(IReadOnlyDictionary<Speech.SpeechEngine, stri
         Speech.SpeechEngine.Silero => (silero, residentSileroIds.Contains(voiceId)),
         { } engine => (additional[engine], residentAdditionalIds.Contains(voiceId)),
         null => (null, false)
+    };
+
+    // Whether the engine of this voice currently keeps other selected voices loaded.
+    private bool HasResident(string voiceId) => SpeechEngines.FromVoiceId(voiceId) switch
+    {
+        SpeechEngine.Piper => residentVoiceIds.Length > 0,
+        SpeechEngine.Silero => residentSileroIds.Length > 0,
+        { } engine => residentAdditionalIds.Any(x => SpeechEngines.FromVoiceId(x) == engine),
+        null => false
     };
 
     private static IEnumerable<string> BoundRequests(string text, int limit)

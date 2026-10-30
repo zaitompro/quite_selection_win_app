@@ -449,7 +449,8 @@ internal sealed partial class AppShell : IDisposable
         {
             if (!Voices.Any(x => x.Id == snapshot.VoiceId)) throw new QuietException(ErrorCode.VoiceMissing);
             operation.Transition(OperationState.Speaking);
-            await worker.CallAsync(new("speak", Text: LanguagePlanner.TestPhrase(snapshot.Language), VoiceId: snapshot.VoiceId, Speed: snapshot.Speed), TimeSpan.FromMinutes(3), operation.Token);
+            // Same buffered player as reading; the workers' own playback reopened the device per block.
+            await worker.SpeakPlanAsync([new(LanguagePlanner.TestPhrase(snapshot.Language), snapshot.Language, snapshot.VoiceId, snapshot.Speed)], operation.Token);
         });
     }
 

@@ -134,31 +134,39 @@ internal static class WorkerHost
                     return Recognize(captured, request.Language);
                 }
             case "ocr-fixture":
-                using (var bitmap = new Bitmap(1200, 180, PixelFormat.Format32bppArgb))
-                {
-                    using (var graphics = Graphics.FromImage(bitmap))
-                    using (var font = new Font("Yu Gothic", 32))
-                    {
-                        graphics.Clear(Color.White);
-                        graphics.DrawString(request.Text, font, Brushes.Black, 20, 40);
-                    }
+                using (var bitmap = DrawFixture(request.Text, request.Fixture))
                     return Recognize(bitmap, request.Language);
-                }
             default: throw new QuietException(ErrorCode.WorkerFailure);
         }
     }
 
-    private static WorkerResponse Recognize(Bitmap bitmap, string language)
+    // Synthetic OCR images that resemble hard screen captures. Text comes from the checks only.
+    private static Bitmap DrawFixture(string text, string? kind)
     {
-        var data = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
-        try
+        bool japanese = text.Any(c => c is >= '\u3040' and <= '\u9fff');
+        string family = japanese ? "Yu Gothic UI" : "Segoe UI";
+        (float size, Color back, Color fore) = kind switch
         {
-            NativeMethods.Check(NativeMethods.qs_recognize(data.Scan0, bitmap.Width, bitmap.Height, language, out var text), ErrorCode.OcrFailure);
-            var result = NativeMethods.TakeString(text);
-            if (string.IsNullOrWhiteSpace(result)) throw new QuietException(ErrorCode.OcrEmpty);
-            if (result.Length > TextLimits.Maximum) throw new QuietException(ErrorCode.TooLong);
-            return new(Text: result);
-        }
-        finally { bitmap.UnlockBits(data); }
+            "small" => (8.5f, Color.White, Color.Black),            // About 11 px, a dense UI font.
+            "dark" => (11f, Color.FromArgb(32, 32, 32), Color.FromArgb(230, 230, 230)),
+            "low-contrast" => (11f, Color.FromArgb(243, 243, 243), Color.FromArgb(140, 140, 140)),
+            "tight" => (16f, Color.White, Color.Black),
+            _ => (32f, Color.White, Color.Black)
+        };
+        using var font = new Font(family, size);
+        SizeF measured;
+        using (var probe = new Bitmap(1, 1)) using (var g = Graphics.FromImage(probe)) measured = g.MeasureString(text, font);
+        int margin = kind == "tight" ? 0 : kind is null ? 40 : 8;
+        int width = (int)Math.Ceiling(measured.Width) + 2 * margin, height = (int)Math.Ceiling(measured.Height) + 2 * margin;
+        if (kind is null) { width = Math.Max(width, 1200); height = Math.Max(height, 180); }
+        var bitmap = new Bitmap(Math.Max(8, width), Math.Max(8, height), PixelFormat.Format32bppArgb);
+        using var graphics = Graphics.FromImage(bitmap);
+        graphics.Clear(back);
+        graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit; // As on screen.
+        using var brush = new SolidBrush(fore);
+        graphics.DrawString(text, font, brush, margin - (kind == "tight" ? 2 : 0), margin - (kind == "tight" ? 3 : 0));
+        return bitmap;
     }
+
+    private static WorkerResponse Recognize(Bitmap bitmap, string language) => OcrPipeline.Recognize(bitmap, language);
 }

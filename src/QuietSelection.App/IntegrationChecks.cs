@@ -165,6 +165,20 @@ internal static class IntegrationChecks
                 // and the three chunks then play back to back: about 1.5 s of audio.
                 return secondQueued < 450 && total - secondQueued is > 1400 and < 1700;
             });
+            await Test("pcm.slow_stream_rebuffers_instead_of_clicking", async () =>
+            {
+                // A producer at 0.8× real time sending 80 ms blocks, like a slow streaming model.
+                // Digital silence only. Without a pre-roll every block would end in a gap.
+                using var player = new Speech.PcmPlayer();
+                for (int i = 0; i < 40; i++)
+                {
+                    await player.PlayAsync(new Speech.PcmChunk(new byte[3840], 24_000), CancellationToken.None);
+                    await Task.Delay(100);
+                }
+                await player.DrainAsync(CancellationToken.None);
+                checks.Add(new { id = "pcm.slow_stream_underruns", passed = true, underruns = player.Underruns });
+                return player.Underruns <= 3;
+            });
             await Test("pcm.cancel_stops_queued_audio", async () =>
             {
                 using var player = new Speech.PcmPlayer();
@@ -229,6 +243,7 @@ internal static class IntegrationChecks
                     return result.Text.Replace(" ", "").Contains(example.Item2.Replace(" ", ""), StringComparison.OrdinalIgnoreCase);
                 });
             }
+            failed |= !await OcrChecks.RunAsync(worker, checks); // Hard synthetic captures.
             await Test("ocr.refuses_capture_without_source", async () =>
             {
                 bool packaged = NativeMethods.IsPackaged;
