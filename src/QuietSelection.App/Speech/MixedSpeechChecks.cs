@@ -30,7 +30,7 @@ internal static class MixedSpeechChecks
             var checks = new List<object>(); var measurements = new List<object>(); bool failed = false;
             using var router = new WorkerClient(roots);
             using var limit = new CancellationTokenSource(TimeSpan.FromMinutes(12));
-            uint length = 0; bool packaged = Platform.NativeMethods.GetCurrentPackageFullName(ref length, 0) != 15700;
+            bool packaged = Platform.NativeMethods.IsPackaged;
             async Task Report(bool complete) => await File.WriteAllTextAsync(Path.Combine(directory, "mixed-speech.json"),
                 JsonSerializer.Serialize(new { syntheticDataOnly = true, packaged, complete, completedUtc = DateTimeOffset.UtcNow,
                     scope = "One playback queue, speed 50, retained models. Real-play first audio is time to waveOutWrite; gap includes waiting and device preparation between completed blocks. No acoustic measurement. Validation callbacks do not play sound. Worker RAM excludes UI.",

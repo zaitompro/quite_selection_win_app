@@ -126,8 +126,7 @@ internal static class PiperChecks
                 try { await PiperModels.PrepareAsync(null, new Progress<string>(), cancellation.Token); return false; }
                 catch (OperationCanceledException) { await PiperModels.VerifyAsync(PiperModels.Root, PiperModels.Catalog.SelectMany(x => x.Files), CancellationToken.None); return true; }
             });
-            uint packageLength = 0;
-            bool packaged = Platform.NativeMethods.GetCurrentPackageFullName(ref packageLength, 0) != 15700;
+            bool packaged = Platform.NativeMethods.IsPackaged;
             await File.WriteAllTextAsync(Path.Combine(reportDirectory, "piper.json"), JsonSerializer.Serialize(new
             {
                 syntheticDataOnly = true, packaged, completedUtc = DateTimeOffset.UtcNow,

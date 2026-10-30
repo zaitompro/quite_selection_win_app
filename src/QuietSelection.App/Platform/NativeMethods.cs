@@ -7,7 +7,28 @@ internal static class NativeMethods
     [DllImport("user32.dll")] internal static extern nint GetForegroundWindow();
     [DllImport("user32.dll")] internal static extern uint GetWindowThreadProcessId(nint window, out uint processId);
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
-    internal static extern int GetCurrentPackageFullName(ref uint length, nint fullName);
+    private static extern int GetCurrentPackageFullName(ref uint length, nint fullName);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, EntryPoint = "GetCurrentPackageFullName")]
+    private static extern int GetCurrentPackageFullNameBuffer(ref uint length, [Out] char[] fullName);
+    private const int AppModelErrorNoPackage = 15700;
+    internal const int ErrorNotFoundHResult = unchecked((int)0x80070490);
+
+    /// <summary>True when running with MSIX package identity (required for system OCR).</summary>
+    internal static bool IsPackaged { get { uint length = 0; return GetCurrentPackageFullName(ref length, 0) != AppModelErrorNoPackage; } }
+
+    // Full name: Name_Version_Architecture_ResourceId_PublisherId.
+    internal static string? PackageVersion
+    {
+        get
+        {
+            uint length = 0;
+            if (GetCurrentPackageFullName(ref length, 0) == AppModelErrorNoPackage || length == 0) return null;
+            var buffer = new char[length];
+            if (GetCurrentPackageFullNameBuffer(ref length, buffer) != 0) return null;
+            var parts = new string(buffer, 0, (int)length - 1).Split('_');
+            return parts.Length > 1 ? parts[1] : null;
+        }
+    }
     [DllImport("winmm.dll", CharSet = CharSet.Unicode, EntryPoint = "PlaySoundW")]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool PlaySound(nint sound, nint module, uint flags);

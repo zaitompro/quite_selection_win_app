@@ -225,6 +225,11 @@ Test("settings.atomic_roundtrip_and_backup", () =>
         Check(store.Load().Primary.Speed == 80 && new SettingsStore(path + ".previous").Load().Primary.Speed == 40);
         File.WriteAllText(path, "{invalid"); Error(ErrorCode.InvalidSettings, () => store.Load());
         Check(File.ReadAllText(path) == "{invalid");
+        // Reset keeps the unreadable file and lets defaults be saved at the original path.
+        var aside = store.MoveAside();
+        Check(aside is not null && File.ReadAllText(aside) == "{invalid" && !File.Exists(path));
+        store.Save(new AppSettings());
+        Check(store.Load().ShowReadingIndicator && store.MoveAside() is not null && store.MoveAside() is null);
     }
     finally { Directory.Delete(directory, true); }
 });

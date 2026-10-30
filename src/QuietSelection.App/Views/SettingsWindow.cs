@@ -1,65 +1,108 @@
-using System.Diagnostics;
+using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Data;
 using System.Windows.Input;
+using System.Windows.Markup;
 using System.Windows.Media;
+using System.Windows.Threading;
+using QuietSelection.App.Platform;
+using QuietSelection.App.Speech;
 using QuietSelection.App.Speech.Downloads;
 
 namespace QuietSelection.App.Views;
 
-internal sealed class SettingsWindow : Window
+/// <summary>
+/// Settings in the Windows 11 Settings layout. The page is rebuilt only when the page or the
+/// installed voice list changes; live state (status, progress, memory) is updated in place.
+/// </summary>
+internal sealed partial class SettingsWindow : Window
 {
+    private static readonly (string Glyph, string Title)[] Sections =
+        [("\uE80F", "Общие"), ("\uE767", "Речь"), ("\uE774", "Перевод"), ("\uE765", "Сочетания клавиш"), ("\uE7A8", "Чтение с экрана")];
+
     private readonly AppShell shell;
-    private readonly ListBox navigation = new() { MinWidth = 210, BorderThickness = new(0), Margin = new(0, 0, 18, 0) };
-    private readonly StackPanel page = new() { Margin = new(4, 0, 8, 8) };
-    private readonly TextBlock status = new() { TextWrapping = TextWrapping.Wrap, Margin = new(0, 8, 14, 0), FontSize = 16 };
-    private int voiceCount = -1;
-    private bool refreshing;
-    private TextBlock? modelStatus;
-    private Button? downloadModels;
-    private Button? checkModels;
-    private Button? cancelModels;
-    private Button? cancelVoice;
-    private TextBlock? piperStatus;
-    private TextBlock? sileroStatus;
-    private TextBlock? additionalStatus;
+    private readonly ListBox navigation = new() { BorderThickness = new(0), Background = Brushes.Transparent };
+    private readonly StackPanel page = new() { MaxWidth = 860, HorizontalAlignment = HorizontalAlignment.Left };
+    private readonly ScrollViewer scroll;
+    private readonly TextBlock status = new() { TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock statusIcon = Ui.Icon("\uE73E", 16);
+    private readonly Button stop;
+    // Live parts of the current page, refreshed on every state change.
+    private readonly List<Action> updaters = [];
     // Slider changes apply in memory at once; the file is written once the value settles.
-    private readonly System.Windows.Threading.DispatcherTimer pendingSave = new() { Interval = TimeSpan.FromMilliseconds(400) };
+    private readonly DispatcherTimer pendingSave = new() { Interval = TimeSpan.FromMilliseconds(400) };
+    private string voiceSignature = "";
+    private ReadingCommand? recording;
 
     internal SettingsWindow(AppShell owner)
     {
         shell = owner;
-        pendingSave.Tick += (_, _) => FlushSave();
         SystemTheme.ApplyWindow(this);
-        Title = "QuietSelection — Настройки";
-        Width = Math.Min(960, SystemParameters.WorkArea.Width - 30);
-        Height = Math.Min(720, SystemParameters.WorkArea.Height - 30);
-        MinWidth = 480; MinHeight = 360; FontSize = 18;
+        Title = "QuietSelection — настройки";
+        Icon = AppIcon.Window;
+        FontSize = Ui.Body;
+        Width = Math.Min(1000, SystemParameters.WorkArea.Width - 40);
+        Height = Math.Min(760, SystemParameters.WorkArea.Height - 40);
+        MinWidth = 640; MinHeight = 440;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
-        var root = new Grid { Margin = new(20) };
+        pendingSave.Tick += (_, _) => FlushSave();
+
+        var root = new Grid();
         root.SetResourceReference(Panel.BackgroundProperty, "SolidBackgroundFillColorBaseBrush");
-        root.RowDefinitions.Add(new() { Height = new(1, GridUnitType.Star) }); root.RowDefinitions.Add(new() { Height = GridLength.Auto });
-        root.ColumnDefinitions.Add(new() { Width = new(225) }); root.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
-        foreach (var section in new[] { "Общие", "Речь", "Перевод", "Сочетания клавиш", "Чтение с экрана" })
+        root.ColumnDefinitions.Add(new() { Width = new(260) });
+        root.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
+        root.RowDefinitions.Add(new() { Height = new(1, GridUnitType.Star) });
+        root.RowDefinitions.Add(new() { Height = GridLength.Auto });
+
+        // Navigation: app identity, then sections with icons.
+        var side = new DockPanel { Margin = new(12, 16, 8, 12) };
+        var identity = new StackPanel { Orientation = Orientation.Horizontal, Margin = new(8, 0, 0, 20) };
+        identity.Children.Add(new Image { Source = AppIcon.Render(32), Width = 32, Height = 32, Margin = new(0, 0, 12, 0) });
+        var name = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        name.Children.Add(new TextBlock { Text = "QuietSelection", FontWeight = FontWeights.SemiBold });
+        name.Children.Add(Ui.Secondary("Версия " + AppInfo.Version));
+        identity.Children.Add(name);
+        DockPanel.SetDock(identity, Dock.Top); side.Children.Add(identity);
+        navigation.ItemContainerStyle = Ui.NavigationItemStyle();
+        foreach (var (glyph, title) in Sections)
         {
-            var item = new ListBoxItem { Content = section, Padding = new(10, 14, 8, 14), HorizontalContentAlignment = HorizontalAlignment.Stretch };
-            AutomationProperties.SetName(item, section); navigation.Items.Add(item);
+            var row = new StackPanel { Orientation = Orientation.Horizontal };
+            var icon = Ui.Icon(glyph, 16); icon.Margin = new(0, 0, 12, 0);
+            row.Children.Add(icon); row.Children.Add(new TextBlock { Text = title });
+            var item = new ListBoxItem { Content = row };
+            AutomationProperties.SetName(item, title);
+            navigation.Items.Add(item);
         }
-        root.Children.Add(navigation);
-        var scroll = new ScrollViewer { Content = page, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
+        side.Children.Add(navigation);
+        root.Children.Add(side);
+
+        scroll = new ScrollViewer { Content = page, Padding = new(28, 20, 28, 24), VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
         Grid.SetColumn(scroll, 1); root.Children.Add(scroll);
-        var footer = new Grid { Margin = new(0, 14, 0, 0) };
-        footer.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) }); footer.ColumnDefinitions.Add(new() { Width = GridLength.Auto }); footer.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        AutomationProperties.SetLiveSetting(status, AutomationLiveSetting.Polite); footer.Children.Add(status);
-        var stop = Button("Остановить", shell.Stop); Grid.SetColumn(stop, 1); footer.Children.Add(stop);
-        var exit = Button("Завершить", shell.Exit); Grid.SetColumn(exit, 2); footer.Children.Add(exit);
-        Grid.SetRow(footer, 1); Grid.SetColumnSpan(footer, 2); root.Children.Add(footer); Content = root;
-        navigation.SelectionChanged += (_, _) => RenderPage();
-        PreviewKeyDown += (_, e) =>
-        {
-            if (Keyboard.Modifiers == ModifierKeys.Control && e.Key is Key.W or Key.Q) { e.Handled = true; Close(); }
-        };
+
+        // Footer: what the app is doing now and the one control that acts on it.
+        var footer = new Grid { Margin = new(0) };
+        footer.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        footer.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
+        footer.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        statusIcon.Margin = new(0, 0, 10, 0); statusIcon.VerticalAlignment = VerticalAlignment.Center;
+        footer.Children.Add(statusIcon);
+        AutomationProperties.SetLiveSetting(status, AutomationLiveSetting.Polite);
+        Grid.SetColumn(status, 1); footer.Children.Add(status);
+        stop = Ui.Button("Остановить", shell.Stop, automationName: "Остановить чтение");
+        stop.Margin = new(12, 0, 0, 0);
+        Grid.SetColumn(stop, 2); footer.Children.Add(stop);
+        var footerBar = new Border { Child = footer, BorderThickness = new(0, 1, 0, 0), Padding = new(20, 10, 20, 10) };
+        footerBar.SetResourceReference(Border.BorderBrushProperty, "DividerStrokeColorDefaultBrush");
+        footerBar.SetResourceReference(Border.BackgroundProperty, "SolidBackgroundFillColorSecondaryBrush");
+        Grid.SetRow(footerBar, 1); Grid.SetColumnSpan(footerBar, 2); root.Children.Add(footerBar);
+        Content = root;
+
+        navigation.SelectionChanged += (_, _) => RenderPage(keepPosition: false);
+        PreviewKeyDown += OnPreviewKeyDown;
+        Deactivated += (_, _) => StopRecording();
         // No application control may read/write the system data transfer buffer.
         CommandManager.AddPreviewCanExecuteHandler(this, (_, e) =>
         {
@@ -71,9 +114,70 @@ internal sealed class SettingsWindow : Window
             if (e.Command == ApplicationCommands.Copy || e.Command == ApplicationCommands.Cut || e.Command == ApplicationCommands.Paste) e.Handled = true;
         });
         shell.Changed += Update;
-        Closed += (_, _) => { FlushSave(); shell.Changed -= Update; };
-        OpenGeneral(); Update();
+        Closed += (_, _) => { StopRecording(); FlushSave(); shell.Changed -= Update; };
+        voiceSignature = VoiceSignature();
+        navigation.SelectedIndex = 0;
+        Update();
     }
+
+    internal void OpenSection(int index) { navigation.SelectedIndex = index; RenderPage(keepPosition: false); }
+
+    private string VoiceSignature() => string.Join("|", shell.Voices.Select(x => x.Id));
+
+    private void Update()
+    {
+        status.Text = shell.Status;
+        statusIcon.Text = shell.Busy ? "\uE767" : shell.Status == "Готово." ? "\uE73E" : "\uE946";
+        statusIcon.SetResourceReference(TextBlock.ForegroundProperty, shell.Busy ? "AccentTextFillColorPrimaryBrush" : "TextFillColorSecondaryBrush");
+        stop.IsEnabled = shell.Busy;
+        foreach (var update in updaters) update();
+        string signature = VoiceSignature();
+        if (signature != voiceSignature) { voiceSignature = signature; RenderPage(keepPosition: true); }
+    }
+
+    // Rebuilding keeps the scroll position and the focused control, so screen readers do not lose their place.
+    private void RenderPage(bool keepPosition)
+    {
+        StopRecording();
+        double offset = keepPosition ? scroll.VerticalOffset : 0;
+        string? focused = keepPosition && Keyboard.FocusedElement is DependencyObject element && IsDescendant(page, element)
+            ? AutomationProperties.GetName(element) : null;
+        updaters.Clear();
+        page.Children.Clear();
+        switch (navigation.SelectedIndex)
+        {
+            case 0: General(); break;
+            case 1: Speech(); break;
+            case 2: Translation(); break;
+            case 3: Shortcuts(); break;
+            case 4: Ocr(); break;
+        }
+        foreach (var update in updaters) update();
+        scroll.ScrollToVerticalOffset(offset);
+        if (!string.IsNullOrEmpty(focused))
+            Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () =>
+                FindByName(page, focused)?.Focus());
+    }
+
+    private static bool IsDescendant(DependencyObject root, DependencyObject element)
+    {
+        for (var current = element; current is not null; current = current is Visual or System.Windows.Media.Media3D.Visual3D ? VisualTreeHelper.GetParent(current) : LogicalTreeHelper.GetParent(current))
+            if (current == root) return true;
+        return false;
+    }
+
+    private static UIElement? FindByName(DependencyObject root, string name)
+    {
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is UIElement { Focusable: true, IsVisible: true } candidate && AutomationProperties.GetName(child) == name) return candidate;
+            if (FindByName(child, name) is { } found) return found;
+        }
+        return null;
+    }
+
+    private void Add(UIElement element) => page.Children.Add(element);
 
     private void ScheduleSave() { pendingSave.Stop(); pendingSave.Start(); }
     private void FlushSave()
@@ -81,238 +185,436 @@ internal sealed class SettingsWindow : Window
         if (!pendingSave.IsEnabled) return;
         pendingSave.Stop(); shell.Save();
     }
-    internal void OpenGeneral() { navigation.SelectedIndex = 0; RenderPage(); }
-    internal void OpenSection(int index) { navigation.SelectedIndex = index; RenderPage(); }
-    private void Update()
-    {
-        status.Text = shell.Status;
-        if (modelStatus is not null) modelStatus.Text = shell.ModelStatus;
-        if (piperStatus is not null) piperStatus.Text = shell.PiperStatus;
-        if (sileroStatus is not null) sileroStatus.Text = shell.SileroStatus;
-        if (additionalStatus is not null) additionalStatus.Text = shell.AdditionalStatus;
-        if (downloadModels is not null) downloadModels.IsEnabled = !shell.PreparingModels;
-        if (checkModels is not null) checkModels.IsEnabled = !shell.PreparingModels;
-        if (cancelModels is not null) cancelModels.IsEnabled = shell.PreparingModels;
-        if (cancelVoice is not null) cancelVoice.IsEnabled = shell.CanCancelVoiceDownload;
-        if (voiceCount != shell.Voices.Length) { voiceCount = shell.Voices.Length; RenderPage(); }
-    }
-    private void RenderPage()
-    {
-        if (refreshing) return;
-        refreshing = true;
-        try
-        {
-            page.Children.Clear();
-            modelStatus = null; downloadModels = null; checkModels = null; cancelModels = null;
-            cancelVoice = null;
-            piperStatus = null; sileroStatus = null; additionalStatus = null;
-            switch (navigation.SelectedIndex)
-            {
-                case 0: General(); break;
-                case 1: Speech(); break;
-                case 2: Translation(); break;
-                case 3: Shortcuts(); break;
-                case 4: Ocr(); break;
-            }
-        }
-        finally { refreshing = false; }
-    }
+
+    // ---- General -------------------------------------------------------------------------
+
     private void General()
     {
-        Heading("QuietSelection"); Text("Версия 0.1.0 — разработка и проверка");
-        SelectableText("Читайте выделенный текст, распознавайте область экрана и слушайте перевод. Обработка выполняется на вашем компьютере.");
-        Text("Закрытие этого окна оставляет приложение в трее. Полностью выйти можно кнопкой «Завершить».");
-        var startup = new CheckBox { Content = "Запускать при входе в Windows", IsChecked = shell.Settings.StartAtLogin, IsEnabled = false, Margin = new(0, 15, 0, 10) };
-        AutomationProperties.SetName(startup, "Запускать при входе в Windows — доступно после установки"); page.Children.Add(startup);
-        Text("Автозапуск станет доступен после подготовки стабильного пути установки.");
-        Text("Буфер обмена не используется. История прочитанного не сохраняется. Загрузка компонентов выполняется только отдельным действием.");
+        Add(Ui.PageTitle("Общие"));
+        if (!shell.SettingsWritable)
+            Add(Ui.InfoBar(Ui.Tone.Critical, "Файл настроек повреждён",
+                "Изменения сейчас не сохраняются. Сброс сохранит прежний файл рядом и начнёт с настроек по умолчанию.",
+                Ui.Button("Сбросить настройки", ConfirmReset)));
+
+        var hero = new Grid();
+        hero.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        hero.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
+        hero.Children.Add(new Image { Source = AppIcon.Render(56), Width = 56, Height = 56, Margin = new(0, 0, 16, 0), VerticalAlignment = VerticalAlignment.Top });
+        var about = new StackPanel();
+        about.Children.Add(new TextBlock { Text = "QuietSelection", FontSize = Ui.Subtitle, FontWeight = FontWeights.SemiBold });
+        about.Children.Add(Ui.Secondary("Версия " + AppInfo.Version + " · локальное чтение, распознавание и перевод", Ui.Body));
+        var privacy = Ui.Secondary("Всё выполняется на этом компьютере. Буфер обмена не используется, история прочитанного не сохраняется.");
+        privacy.Margin = new(0, 8, 0, 0); about.Children.Add(privacy);
+        Grid.SetColumn(about, 1); hero.Children.Add(about);
+        Add(Ui.Card(hero, 16));
+
+        // Shortcut summary: the first thing a new user needs.
+        var assigned = Enum.GetValues<ReadingCommand>().Select(c => (c, shell.Settings.Hotkeys.GetValueOrDefault(c, ""))).Where(x => x.Item2.Length > 0).ToArray();
+        if (assigned.Length == 0)
+            Add(Ui.InfoBar(Ui.Tone.Neutral, "Сочетания клавиш не назначены",
+                "Назначьте сочетание, чтобы читать выделенный текст в любом приложении.",
+                Ui.Button("Назначить…", () => OpenSection(3), accent: true)));
+        else
+        {
+            var list = new StackPanel();
+            foreach (var (command, chord) in assigned)
+            {
+                var line = new DockPanel { Margin = new(0, 2, 0, 2) };
+                var key = Ui.Badge(chord, Ui.Tone.Neutral); key.Margin = new(0); DockPanel.SetDock(key, Dock.Right);
+                line.Children.Add(key); line.Children.Add(new TextBlock { Text = CommandTitle(command), VerticalAlignment = VerticalAlignment.Center });
+                list.Children.Add(line);
+            }
+            Add(Ui.Section("Сочетания клавиш"));
+            Add(Ui.Card(list));
+        }
+
+        Add(Ui.Section("Поведение"));
+        Add(Ui.SettingRow("\uE823", "Запускать при входе в Windows", StartupDescription(), StartupToggle()));
+        Add(Ui.SettingRow("\uE7B3", "Индикатор чтения", "Небольшая плашка с кнопкой «Стоп» в углу экрана во время чтения и перевода.",
+            Ui.Toggle(shell.Settings.ShowReadingIndicator, value => { shell.Settings.ShowReadingIndicator = value; shell.Save(); }, "Индикатор чтения")));
+        Add(Ui.SettingRow("\uE7E8", "Завершить работу", "Закрытие окна оставляет QuietSelection в области уведомлений.",
+            Ui.Button("Завершить", shell.Exit, automationName: "Завершить QuietSelection")));
     }
+
+    private void ConfirmReset()
+    {
+        if (MessageBox.Show(this, "Сбросить настройки? Повреждённый файл будет сохранён рядом с новым.", "Сброс настроек",
+            MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes) { shell.ResetSettings(); RenderPage(keepPosition: false); }
+    }
+
+    private string StartupDescription() => shell.Startup switch
+    {
+        StartupState.NotPackaged => "Доступно в установленной версии QuietSelection.",
+        StartupState.DisabledByUser => "Отключено в диспетчере задач или параметрах Windows. Включите там.",
+        StartupState.DisabledByPolicy => "Запрещено политикой организации.",
+        _ => "Приложение запускается свёрнутым в область уведомлений."
+    };
+
+    private CheckBox StartupToggle()
+    {
+        var toggle = Ui.Toggle(shell.Startup == StartupState.Enabled, value => _ = SetStartupAsync(value), "Запускать при входе в Windows");
+        toggle.IsEnabled = shell.Startup is StartupState.Enabled or StartupState.Disabled;
+        return toggle;
+    }
+
+    private async Task SetStartupAsync(bool value)
+    {
+        await shell.SetStartAtLoginAsync(value);
+        if (navigation.SelectedIndex == 0) RenderPage(keepPosition: true);
+    }
+
+    // ---- Speech --------------------------------------------------------------------------
+
     private void Speech()
     {
-        Heading("Основной язык");
-        LanguageRow(shell.Settings.Primary, true);
-        var keepPiper = new CheckBox { Content = "Держать выбранные голоса Piper в памяти", IsChecked = shell.Settings.KeepPiperLoaded, Margin = new(0, 12, 0, 8) };
-        keepPiper.Checked += (_, _) => { shell.Settings.KeepPiperLoaded = true; shell.Save(); };
-        keepPiper.Unchecked += (_, _) => { shell.Settings.KeepPiperLoaded = false; shell.Save(); };
-        page.Children.Add(keepPiper);
-        piperStatus = new TextBlock { Text = shell.PiperStatus, TextWrapping = TextWrapping.Wrap, Margin = new(0, 0, 0, 10) };
-        AutomationProperties.SetLiveSetting(piperStatus, AutomationLiveSetting.Polite); page.Children.Add(piperStatus);
-        var keepSilero = new CheckBox { Content = "Держать выбранные голоса Silero в памяти", IsChecked = shell.Settings.KeepSileroLoaded, Margin = new(0, 0, 0, 8) };
-        keepSilero.Checked += (_, _) => { shell.Settings.KeepSileroLoaded = true; shell.Save(); };
-        keepSilero.Unchecked += (_, _) => { shell.Settings.KeepSileroLoaded = false; shell.Save(); };
-        page.Children.Add(keepSilero);
-        sileroStatus = new TextBlock { Text = shell.SileroStatus, TextWrapping = TextWrapping.Wrap, Margin = new(0, 0, 0, 10) };
-        AutomationProperties.SetLiveSetting(sileroStatus, AutomationLiveSetting.Polite); page.Children.Add(sileroStatus);
-        var keepAdditional = new CheckBox { Content = "Держать выбранные голоса Kitten, Pocket, Kokoro и VOICEVOX в памяти", IsChecked = shell.Settings.KeepAdditionalSpeechLoaded, Margin = new(0, 0, 0, 8) };
-        keepAdditional.Checked += (_, _) => { shell.Settings.KeepAdditionalSpeechLoaded = true; shell.Save(); };
-        keepAdditional.Unchecked += (_, _) => { shell.Settings.KeepAdditionalSpeechLoaded = false; shell.Save(); };
-        page.Children.Add(keepAdditional);
-        additionalStatus = new TextBlock { Text = shell.AdditionalStatus, TextWrapping = TextWrapping.Wrap, Margin = new(0, 0, 0, 10) };
-        AutomationProperties.SetLiveSetting(additionalStatus, AutomationLiveSetting.Polite); page.Children.Add(additionalStatus);
-        var automatic = new CheckBox { Content = "Определять язык автоматически", IsChecked = shell.Settings.AutoDetect, Margin = new(0, 16, 0, 12) };
-        automatic.Checked += (_, _) => { shell.Settings.AutoDetect = true; shell.Save(); };
-        automatic.Unchecked += (_, _) => { shell.Settings.AutoDetect = false; shell.Save(); }; page.Children.Add(automatic);
-        Heading("Дополнительные языки", 21);
-        var rows = new StackPanel();
-        page.Children.Add(new ScrollViewer { Content = rows, Height = 250, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
-        foreach (var language in shell.Settings.Additional.ToArray()) LanguageRow(language, false, rows);
+        Add(Ui.PageTitle("Речь"));
+        if (shell.Voices.Length == 0)
+            Add(Ui.InfoBar(Ui.Tone.Caution, "Голоса не найдены", "Установите локальные голоса или голоса Windows.",
+                Ui.Button("Каталог голосов…", OpenCatalog, accent: true)));
+        Add(Ui.SettingRow("\uE8C1", "Определять язык автоматически",
+            "Русские, английские и японские вставки читаются голосами своих языков. Остальное — основным голосом.",
+            Ui.Toggle(shell.Settings.AutoDetect, value => { shell.Settings.AutoDetect = value; shell.Save(); }, "Определять язык автоматически")));
+
+        Add(Ui.Section("Основной язык"));
+        Add(LanguageCard(shell.Settings.Primary, primary: true));
+        Add(Ui.Section("Дополнительные языки"));
+        foreach (var language in shell.Settings.Additional.ToArray()) Add(LanguageCard(language, primary: false));
         var available = AppSettings.SupportedLanguages.Where(x => x.Key != shell.Settings.Primary.Language && shell.Settings.Additional.All(y => y.Language != x.Key)).ToArray();
         if (available.Length > 0)
         {
-            var add = new ComboBox { ItemsSource = available, DisplayMemberPath = "Value", SelectedIndex = 0, Margin = new(0, 10, 0, 6), MinHeight = 34 };
-            AutomationProperties.SetName(add, "Язык для добавления"); page.Children.Add(add);
-            page.Children.Add(Button("Добавить язык", () => { if (add.SelectedItem is KeyValuePair<string, string> pair) { shell.Settings.Additional.Add(new() { Language = pair.Key }); shell.Save(); RenderPage(); } }));
+            var add = new ComboBox { ItemsSource = available, DisplayMemberPath = "Value", SelectedIndex = 0, MinWidth = 160, Margin = new(0, 0, 8, 0) };
+            AutomationProperties.SetName(add, "Язык для добавления");
+            var row = new StackPanel { Orientation = Orientation.Horizontal };
+            row.Children.Add(add);
+            row.Children.Add(Ui.Button("Добавить", () =>
+            {
+                if (add.SelectedItem is not KeyValuePair<string, string> pair) return;
+                shell.Settings.Additional.Add(new() { Language = pair.Key }); shell.Save(); RenderPage(keepPosition: true);
+            }, automationName: "Добавить язык"));
+            Add(Ui.SettingRow("\uE710", "Добавить язык", null, row));
         }
-        page.Children.Add(Button("Установка голосов…", VoiceHelp));
-        cancelVoice = Button("Отменить загрузку голоса", shell.CancelVoiceDownload);
-        cancelVoice.IsEnabled = shell.CanCancelVoiceDownload; page.Children.Add(cancelVoice);
-        page.Children.Add(Button("Обновить список голосов", async () => { await shell.RefreshVoicesAsync(); RenderPage(); }));
-        Text("Доступны голоса Windows, SAPI 5 (RHVoice) и локальные модели Piper, Silero, Kitten, Pocket, Kokoro и VOICEVOX. При автоопределении русские, английские и японские вставки внутри фразы читаются голосами соответствующих включённых языков. Отдельные неоднозначные фрагменты читаются основным голосом. Следующий фрагмент готовится во время чтения; с медленной моделью возможны паузы.");
+
+        Add(Ui.Section("Голоса"));
+        var catalogButtons = new StackPanel { Orientation = Orientation.Horizontal };
+        catalogButtons.Children.Add(Ui.Button("Обновить", async () => await shell.RefreshVoicesAsync(), automationName: "Обновить список голосов"));
+        catalogButtons.Children.Add(Ui.Button("Каталог голосов…", OpenCatalog, accent: true));
+        Add(Ui.SettingRow("\uE896", "Установка голосов", "Silero, Piper, Kokoro, Kitten, Pocket, VOICEVOX, RHVoice и голоса Windows.", catalogButtons));
+
+        // Technical options stay collapsed: defaults suit most people.
+        var memory = new StackPanel();
+        memory.Children.Add(Ui.Secondary("Выбранные модели остаются в памяти, и чтение начинается быстрее. Выключите, чтобы освободить память: модель будет загружаться при каждом чтении.", Ui.Body));
+        var sets = shell.ResidentVoiceSets.ToArray();
+        AddMemoryOption(memory, sets[0], () => shell.Settings.KeepSileroLoaded, v => shell.Settings.KeepSileroLoaded = v);
+        AddMemoryOption(memory, sets[1], () => shell.Settings.KeepPiperLoaded, v => shell.Settings.KeepPiperLoaded = v);
+        AddMemoryOption(memory, sets[2], () => shell.Settings.KeepAdditionalSpeechLoaded, v => shell.Settings.KeepAdditionalSpeechLoaded = v);
+        var expander = new Expander { Header = "Память и скорость отклика", Content = memory, Margin = new(0, 16, 0, 0) };
+        AutomationProperties.SetName(expander, "Память и скорость отклика");
+        Add(expander);
     }
-    private void LanguageRow(LanguageSettings settings, bool primary, Panel? parent = null)
+
+    private void AddMemoryOption(Panel parent, ResidentModels set, Func<bool> get, Action<bool> set_)
     {
-        parent ??= page;
-        var panel = new StackPanel { Margin = new(0, 0, 0, 14) };
-        var top = new DockPanel();
+        var box = new CheckBox { Content = "Держать в памяти: " + set.Label, IsChecked = get(), Margin = new(0, 12, 0, 0) };
+        box.Checked += (_, _) => { set_(true); shell.Save(); };
+        box.Unchecked += (_, _) => { set_(false); shell.Save(); };
+        var state = Ui.Secondary(set.Status); state.Margin = new(28, 0, 0, 0);
+        AutomationProperties.SetLiveSetting(state, AutomationLiveSetting.Polite);
+        updaters.Add(() => state.Text = set.Status);
+        parent.Children.Add(box); parent.Children.Add(state);
+    }
+
+    private sealed record VoiceChoice(string Id, string Label, string Group, int Order)
+    {
+        public override string ToString() => Label;
+    }
+
+    private static readonly string[] GroupOrder = ["Silero", "Kokoro", "Pocket", "Kitten", "Piper", "VOICEVOX", "SAPI 5", "Windows"];
+
+    [GeneratedRegex(@"\s*\[[^\]]*\]\s*$")]
+    private static partial Regex BracketSuffix();
+
+    private Border LanguageCard(LanguageSettings settings, bool primary)
+    {
+        string languageName = AppSettings.SupportedLanguages[settings.Language];
+        var body = new StackPanel();
+
+        // Header: language, and for additional languages the on/off switch and removal.
+        var header = new DockPanel { Margin = new(0, 0, 0, 12) };
         if (!primary)
         {
-            var enabled = new CheckBox { IsChecked = settings.Enabled, VerticalAlignment = VerticalAlignment.Center, Margin = new(14, 0, 6, 0) };
-            AutomationProperties.SetName(enabled, "Включить дополнительный язык: " + AppSettings.SupportedLanguages[settings.Language]);
-            enabled.Checked += (_, _) => { settings.Enabled = true; shell.Save(); }; enabled.Unchecked += (_, _) => { settings.Enabled = false; shell.Save(); };
-            DockPanel.SetDock(enabled, Dock.Right); top.Children.Add(enabled);
-            var remove = Button("Удалить", () => { shell.Settings.Additional.Remove(settings); shell.Save(); RenderPage(); });
-            AutomationProperties.SetName(remove, "Удалить язык: " + AppSettings.SupportedLanguages[settings.Language]); DockPanel.SetDock(remove, Dock.Right); top.Children.Add(remove);
+            var remove = Ui.Button("Удалить", () => { shell.Settings.Additional.Remove(settings); shell.Save(); RenderPage(keepPosition: true); },
+                automationName: "Удалить язык: " + languageName);
+            remove.MinWidth = 0; remove.Margin = new(8, 0, 0, 0);
+            DockPanel.SetDock(remove, Dock.Right); header.Children.Add(remove);
+            var enabled = Ui.Toggle(settings.Enabled, value => { settings.Enabled = value; shell.Save(); }, "Использовать язык: " + languageName);
+            enabled.Margin = new(8, 0, 0, 0);
+            DockPanel.SetDock(enabled, Dock.Right); header.Children.Add(enabled);
         }
-        var language = new ComboBox { ItemsSource = AppSettings.SupportedLanguages.ToArray(), DisplayMemberPath = "Value", SelectedValuePath = "Key", SelectedValue = settings.Language, MinHeight = 34 };
-        AutomationProperties.SetName(language, primary ? "Основной язык" : "Дополнительный язык");
+        var language = new ComboBox { ItemsSource = AppSettings.SupportedLanguages.ToArray(), DisplayMemberPath = "Value", SelectedValuePath = "Key", SelectedValue = settings.Language, MinWidth = 180, HorizontalAlignment = HorizontalAlignment.Left };
+        AutomationProperties.SetName(language, primary ? "Основной язык" : "Дополнительный язык: " + languageName);
         language.SelectionChanged += (_, _) =>
         {
             var selected = (string)language.SelectedValue;
             if (selected == settings.Language) return;
-            if (shell.Settings.ActiveLanguages.Any(x => !ReferenceEquals(x, settings) && x.Language == selected) ||
-                shell.Settings.Additional.Any(x => !ReferenceEquals(x, settings) && x.Language == selected))
-            { shell.SetStatus("Этот язык уже добавлен. Сначала удалите его из дополнительных."); language.SelectedValue = settings.Language; return; }
-            settings.Language = selected; settings.VoiceId = ""; shell.Save(); RenderPage();
+            if (new[] { shell.Settings.Primary }.Concat(shell.Settings.Additional).Any(x => !ReferenceEquals(x, settings) && x.Language == selected))
+            { shell.SetStatus("Этот язык уже добавлен."); language.SelectedValue = settings.Language; return; }
+            settings.Language = selected; settings.VoiceId = ""; shell.Save(); RenderPage(keepPosition: true);
         };
-        top.Children.Add(language); panel.Children.Add(top);
-        var matching = shell.Voices.Where(x => x.Language.Split('-')[0] == settings.Language).Select(x => new VoiceChoice(x.Id, x.Name + " · " + x.Language)).ToList();
-        bool savedVoiceMissing = !string.IsNullOrEmpty(settings.VoiceId) && matching.All(x => x.Id != settings.VoiceId);
-        matching.Insert(0, new("", savedVoiceMissing ? "Сохранённый голос недоступен" : "Выберите установленный голос"));
-        var voice = new ComboBox { ItemsSource = matching, DisplayMemberPath = "Label", SelectedValuePath = "Id", SelectedValue = matching.Any(x => x.Id == settings.VoiceId) ? settings.VoiceId : "", Margin = new(0, 8, 0, 8), MinHeight = 34 };
-        AutomationProperties.SetName(voice, "Голос: " + AppSettings.SupportedLanguages[settings.Language]);
-        panel.Children.Add(voice);
-        if (matching.Count == 1) panel.Children.Add(new TextBlock { Text = "Локальные голоса для этого языка не найдены.", TextWrapping = TextWrapping.Wrap });
-        string SpeedLabel() => "Скорость: " + settings.Speed + (settings.VoiceId.StartsWith("silero:", StringComparison.Ordinal)
-            ? " — " + (settings.Speed switch { < 25 => "очень медленно", < 50 => "медленно", 50 => "обычная", <= 75 => "быстро", _ => "очень быстро" })
-            : "");
-        var speedLabel = new TextBlock { Text = SpeedLabel(), TextWrapping = TextWrapping.Wrap };
-        voice.SelectionChanged += (_, _) => { settings.VoiceId = (string?)voice.SelectedValue ?? ""; speedLabel.Text = SpeedLabel(); shell.Save(); };
-        panel.Children.Add(speedLabel);
-        var speed = new Slider { Minimum = 0, Maximum = 100, Value = settings.Speed, TickFrequency = 1, IsSnapToTickEnabled = true, SmallChange = 1, LargeChange = 10, Margin = new(0, 5, 0, 8) };
-        AutomationProperties.SetName(speed, "Скорость: " + AppSettings.SupportedLanguages[settings.Language]);
-        speed.ValueChanged += (_, _) => { settings.Speed = (int)speed.Value; speedLabel.Text = SpeedLabel(); ScheduleSave(); }; panel.Children.Add(speed);
-        panel.Children.Add(Button("Прослушать", async () => await shell.PreviewAsync(settings)));
-        parent.Children.Add(panel);
+        header.Children.Add(language);
+        body.Children.Add(header);
+
+        // Voice picker grouped by engine, with search for long lists.
+        var matching = shell.Voices.Where(x => x.Language.Split('-')[0] == settings.Language).ToArray();
+        bool regions = matching.Select(x => x.Language).Distinct().Count() > 1;
+        var choices = matching.Select(x =>
+        {
+            string group = SpeechEngines.Group(x);
+            string label = BracketSuffix().Replace(x.Name, "");
+            if (group != "Windows" && group != "SAPI 5" && label.StartsWith(group + " ", StringComparison.Ordinal)) label = label[(group.Length + 1)..];
+            if (regions) label += " · " + x.Language;
+            int order = Array.IndexOf(GroupOrder, group);
+            return new VoiceChoice(x.Id, label, group, order < 0 ? GroupOrder.Length : order);
+        }).OrderBy(x => x.Order).ThenBy(x => x.Label, StringComparer.CurrentCulture).ToList();
+        var view = new ListCollectionView(choices);
+        view.GroupDescriptions.Add(new PropertyGroupDescription(nameof(VoiceChoice.Group)));
+        // Not synchronized with the view: an unset voice must stay visibly unset.
+        var voice = new ComboBox { ItemsSource = view, SelectedValuePath = "Id", MinHeight = 32, HorizontalAlignment = HorizontalAlignment.Stretch, IsSynchronizedWithCurrentItem = false, SelectedIndex = -1 };
+        voice.GroupStyle.Add(new GroupStyle { HeaderTemplate = (DataTemplate)XamlReader.Parse("""
+            <DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+              <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12" Margin="10,10,10,4" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+            </DataTemplate>
+            """) });
+        if (choices.Any(x => x.Id == settings.VoiceId)) voice.SelectedValue = settings.VoiceId;
+        AutomationProperties.SetName(voice, "Голос: " + languageName);
+        var voiceLabel = Ui.Secondary("Голос"); voiceLabel.Margin = new(0, 0, 0, 4);
+        body.Children.Add(voiceLabel);
+        if (choices.Count > 12)
+        {
+            var search = new TextBox { Margin = new(0, 0, 0, 6) };
+            AutomationProperties.SetName(search, "Поиск голоса: " + languageName);
+            var hint = Ui.Secondary("Поиск голоса", Ui.Body); hint.IsHitTestVisible = false; hint.Margin = new(12, 6, 0, 0);
+            search.TextChanged += (_, _) =>
+            {
+                hint.Visibility = search.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+                string query = search.Text.Trim();
+                view.Filter = query.Length == 0 ? null : o => o is VoiceChoice c && (c.Id == settings.VoiceId
+                    || c.Label.Contains(query, StringComparison.CurrentCultureIgnoreCase) || c.Group.Contains(query, StringComparison.CurrentCultureIgnoreCase));
+            };
+            var searchBox = new Grid(); searchBox.Children.Add(search); searchBox.Children.Add(hint);
+            body.Children.Add(searchBox);
+        }
+        body.Children.Add(voice);
+        bool savedMissing = settings.VoiceId.Length > 0 && choices.All(x => x.Id != settings.VoiceId);
+        var notice = Ui.Secondary(choices.Count == 0 ? "Для этого языка нет установленных голосов. Откройте каталог голосов."
+            : savedMissing ? "Сохранённый голос недоступен. Выберите другой или установите его снова."
+            : settings.VoiceId.Length == 0 ? "Выберите голос." : "");
+        notice.Margin = new(0, 4, 0, 0);
+        if (choices.Count == 0 || savedMissing) notice.SetResourceReference(TextBlock.ForegroundProperty, "SystemFillColorCautionBrush");
+        if (notice.Text.Length > 0) body.Children.Add(notice);
+
+        // Speed and preview on one row.
+        var speedRow = new Grid { Margin = new(0, 12, 0, 0) };
+        speedRow.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        speedRow.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
+        speedRow.ColumnDefinitions.Add(new() { Width = new(112) });
+        speedRow.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        var speedLabel = new TextBlock { Text = "Скорость", Margin = new(0, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center };
+        speedRow.Children.Add(speedLabel);
+        var speed = new Slider { Minimum = 0, Maximum = 100, Value = settings.Speed, TickFrequency = 1, IsSnapToTickEnabled = true, SmallChange = 1, LargeChange = 10, VerticalAlignment = VerticalAlignment.Center };
+        AutomationProperties.SetName(speed, "Скорость: " + languageName);
+        Grid.SetColumn(speed, 1); speedRow.Children.Add(speed);
+        var speedValue = new TextBlock { VerticalAlignment = VerticalAlignment.Center, Margin = new(12, 0, 0, 0) };
+        string SpeedText() => settings.Speed + (settings.VoiceId.StartsWith("silero:", StringComparison.Ordinal)
+            ? " · " + (settings.Speed switch { < 25 => "очень медленно", < 50 => "медленно", 50 => "обычно", <= 75 => "быстро", _ => "очень быстро" }) : "");
+        speedValue.Text = SpeedText();
+        Grid.SetColumn(speedValue, 2); speedRow.Children.Add(speedValue);
+        var preview = Ui.Button("Прослушать", async () => await shell.PreviewAsync(settings), automationName: "Прослушать: " + languageName);
+        preview.Margin = new(8, 0, 0, 0); preview.IsEnabled = settings.VoiceId.Length > 0 && !savedMissing;
+        Grid.SetColumn(preview, 3); speedRow.Children.Add(preview);
+        body.Children.Add(speedRow);
+
+        voice.SelectionChanged += (_, _) =>
+        {
+            settings.VoiceId = (string?)voice.SelectedValue ?? "";
+            speedValue.Text = SpeedText(); preview.IsEnabled = settings.VoiceId.Length > 0;
+            shell.Save();
+        };
+        speed.ValueChanged += (_, _) => { settings.Speed = (int)speed.Value; speedValue.Text = SpeedText(); ScheduleSave(); };
+
+        var card = Ui.Card(body, 8);
+        if (!primary && !settings.Enabled) body.Opacity = 0.75;
+        return card;
     }
+
+    private void OpenCatalog() => CreateVoiceCatalog().ShowDialog();
+    internal Window CreateVoiceCatalog() => new VoiceCatalogWindow(shell) { Owner = this };
+
+    // ---- Translation ---------------------------------------------------------------------
+
     private void Translation()
     {
-        Heading("Перевод на " + AppSettings.SupportedLanguages[shell.Settings.Primary.Language].ToLowerInvariant());
-        Heading("Перевод с", 21);
-        var rows = new StackPanel();
-        foreach (var language in shell.Settings.Additional.Where(x => x.Enabled))
-            rows.Children.Add(new TextBlock { Text = AppSettings.SupportedLanguages[language.Language] + " → " + AppSettings.SupportedLanguages[shell.Settings.Primary.Language] +
-                (!TranslationPlanner.IsSupported(language.Language, shell.Settings.Primary.Language) ? "\nНе поддерживается этим набором." :
-                "\nПрямая модель; статус набора ниже."), TextWrapping = TextWrapping.Wrap, Margin = new(0, 0, 0, 18) });
-        page.Children.Add(new ScrollViewer { Content = rows, MaxHeight = 250, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
-        modelStatus = new TextBlock { Text = shell.ModelStatus, TextWrapping = TextWrapping.Wrap, Margin = new(0, 0, 0, 10) };
-        AutomationProperties.SetLiveSetting(modelStatus, AutomationLiveSetting.Polite); page.Children.Add(modelStatus);
-        downloadModels = Button("Загрузить / восстановить модели…", async () => await shell.DownloadModelsAsync());
-        checkModels = Button("Проверить готовность", async () => await shell.CheckModelsAsync());
-        cancelModels = Button("Отменить подготовку", shell.CancelModelPreparation);
-        downloadModels.IsEnabled = checkModels.IsEnabled = !shell.PreparingModels; cancelModels.IsEnabled = shell.PreparingModels;
-        page.Children.Add(downloadModels); page.Children.Add(checkModels); page.Children.Add(cancelModels);
-        Text("Перевод работает локально. Недостающие модели загружаются только кнопкой выше: до 601,5 МБ для полного набора, 288,6 МБ для добавления прямого японского перевода. Закрытие настроек оставляет подготовку в фоне; выход из приложения отменяет её. После установки сеть не нужна.");
+        string target = AppSettings.SupportedLanguages[shell.Settings.Primary.Language];
+        Add(Ui.PageTitle("Перевод"));
+        Add(Ui.SettingRow("\uE774", "Перевод на " + target.ToLowerInvariant(), "Текст переводится на основной язык и читается основным голосом. Язык меняется в разделе «Речь».", null));
+
+        Add(Ui.Section("Направления"));
+        var routes = new StackPanel();
+        var sources = shell.Settings.Additional.Where(x => x.Enabled).ToArray();
+        if (sources.Length == 0) routes.Children.Add(Ui.Secondary("Включите дополнительный язык в разделе «Речь».", Ui.Body));
+        foreach (var language in sources)
+        {
+            bool supported = TranslationPlanner.IsSupported(language.Language, shell.Settings.Primary.Language);
+            var line = new DockPanel { Margin = new(0, 4, 0, 4) };
+            var badge = Ui.Badge(supported ? "Прямая модель" : "Не поддерживается", supported ? Ui.Tone.Neutral : Ui.Tone.Caution);
+            DockPanel.SetDock(badge, Dock.Right); line.Children.Add(badge);
+            line.Children.Add(new TextBlock { Text = AppSettings.SupportedLanguages[language.Language] + " → " + target, VerticalAlignment = VerticalAlignment.Center });
+            routes.Children.Add(line);
+        }
+        Add(Ui.Card(routes));
+
+        Add(Ui.Section("Модели"));
+        var state = new StackPanel();
+        var line1 = new DockPanel();
+        var icon = Ui.Icon("\uE73E", 20); icon.Margin = new(0, 0, 12, 0);
+        line1.Children.Add(icon);
+        var text = new TextBlock { TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
+        AutomationProperties.SetLiveSetting(text, AutomationLiveSetting.Polite);
+        line1.Children.Add(text);
+        state.Children.Add(line1);
+        var progress = new ProgressBar { IsIndeterminate = true, Height = 4, Margin = new(32, 10, 0, 0) };
+        state.Children.Add(progress);
+        var buttons = new WrapPanel { Margin = new(32, 12, 0, 0) };
+        var download = Ui.Button("Загрузить или восстановить…", async () => await shell.DownloadModelsAsync(), accent: true);
+        var check = Ui.Button("Проверить", async () => await shell.CheckModelsAsync(), automationName: "Проверить модели перевода");
+        var cancel = Ui.Button("Отменить", shell.CancelModelPreparation, automationName: "Отменить подготовку моделей");
+        buttons.Children.Add(download); buttons.Children.Add(check); buttons.Children.Add(cancel);
+        state.Children.Add(buttons);
+        Add(Ui.Card(state));
+        updaters.Add(() =>
+        {
+            text.Text = shell.ModelStatus;
+            bool busy = shell.PreparingModels;
+            progress.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
+            cancel.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
+            download.IsEnabled = check.IsEnabled = !busy;
+            icon.Text = busy ? "\uE895" : shell.ModelsReady ? "\uE73E" : "\uE7BA";
+            icon.SetResourceReference(TextBlock.ForegroundProperty, busy ? "AccentTextFillColorPrimaryBrush" : shell.ModelsReady ? "SystemFillColorSuccessBrush" : "SystemFillColorCautionBrush");
+        });
+        var details = Ui.Secondary("Перевод работает локально, сеть после установки не нужна. Полный набор — до 601,5 МБ; прямой перевод с японского — 288,6 МБ. Закрытие окна оставляет подготовку в фоне, выход из приложения отменяет её.");
+        details.Margin = new(4, 8, 0, 0);
+        Add(details);
     }
+
+    // ---- Shortcuts -----------------------------------------------------------------------
+
+    private static string CommandTitle(ReadingCommand command) => command switch
+    {
+        ReadingCommand.Selection => "Прочитать выделенное",
+        ReadingCommand.PrimaryVoice => "Прочитать основным голосом",
+        ReadingCommand.Region => "Распознать и прочитать область",
+        _ => "Перевести и прочитать"
+    };
+
+    private static string CommandDescription(ReadingCommand command) => command switch
+    {
+        ReadingCommand.Selection => "Читает выделенный текст; вставки на других языках — их голосами.",
+        ReadingCommand.PrimaryVoice => "Читает всё выделенное одним основным голосом.",
+        ReadingCommand.Region => "Обведите область экрана — текст будет распознан и прочитан.",
+        _ => "Переводит выделенное на основной язык и читает перевод."
+    };
+
+    private static string CommandGlyph(ReadingCommand command) => command switch
+    {
+        ReadingCommand.Selection => "\uE8D2", ReadingCommand.PrimaryVoice => "\uE767", ReadingCommand.Region => "\uE7A8", _ => "\uE774"
+    };
+
+    private readonly Dictionary<ReadingCommand, Button> shortcutButtons = [];
+
     private void Shortcuts()
     {
-        Heading("Сочетания клавиш");
-        Text("Назначение выполняется явно. Занятое сочетание не заменяет прежнее. Во время операции повтор любой команды останавливает чтение.");
+        Add(Ui.PageTitle("Сочетания клавиш"));
+        Add(Ui.Secondary("Нажмите кнопку с сочетанием и введите новое: Ctrl или Alt вместе с обычной клавишей. Во время чтения повтор любой команды останавливает его.", Ui.Body));
+        page.Children[^1].SetValue(MarginProperty, new Thickness(0, 0, 0, 16));
+        shortcutButtons.Clear();
         foreach (var command in Enum.GetValues<ReadingCommand>())
         {
-            string title = command switch { ReadingCommand.Selection => "Прочитать выделенное", ReadingCommand.PrimaryVoice => "Прочитать основным голосом", ReadingCommand.Region => "Распознать и прочитать область", _ => "Перевести и прочитать" };
-            Text(title);
-            var choices = HotkeyChoices();
-            var combo = new ComboBox { ItemsSource = choices, DisplayMemberPath = "Label", SelectedValuePath = "Id", SelectedValue = shell.Settings.Hotkeys.GetValueOrDefault(command, ""), MinHeight = 36, Margin = new(0, 0, 0, 10) };
-            AutomationProperties.SetName(combo, title);
-            combo.SelectionChanged += (_, _) => { var selected = (string?)combo.SelectedValue ?? ""; if (!shell.ChangeHotkey(command, selected)) combo.SelectedValue = shell.Settings.Hotkeys.GetValueOrDefault(command, ""); };
-            page.Children.Add(combo);
+            string chord = shell.Settings.Hotkeys.GetValueOrDefault(command, "");
+            var record = Ui.Button(chord.Length == 0 ? "Не назначено" : chord, () => StartRecording(command), automationName: CommandTitle(command) + ": изменить сочетание");
+            record.MinWidth = 140;
+            shortcutButtons[command] = record;
+            var clear = Ui.Button("Удалить", () => { shell.ChangeHotkey(command, ""); RenderPage(keepPosition: true); }, automationName: CommandTitle(command) + ": удалить сочетание");
+            clear.MinWidth = 0; clear.Margin = new(0); clear.IsEnabled = chord.Length > 0;
+            var controls = new StackPanel { Orientation = Orientation.Horizontal };
+            controls.Children.Add(record); controls.Children.Add(clear);
+            Add(Ui.SettingRow(CommandGlyph(command), CommandTitle(command), CommandDescription(command), controls));
         }
-        Text("Регистрация Windows проверяет занятость, но сочетание также может использоваться как обычная команда в другом приложении.");
+        var note = Ui.Secondary("Windows проверяет, что сочетание свободно, но оно может совпадать с командой внутри другого приложения — тогда сработает QuietSelection.");
+        note.Margin = new(4, 8, 0, 0);
+        Add(note);
     }
-    private static VoiceChoice[] HotkeyChoices() => Platform.HotkeyManager.Choices.Select(x => new VoiceChoice(x, x.Length == 0 ? "Не назначено" : x)).ToArray();
+
+    private void StartRecording(ReadingCommand command)
+    {
+        StopRecording();
+        recording = command;
+        shell.SuspendHotkeys(); // Pressing an assigned combination must not start reading now.
+        var button = shortcutButtons[command];
+        button.Content = "Нажмите сочетание…";
+        button.Focus();
+        shell.SetStatus("Нажмите новое сочетание для «" + CommandTitle(command) + "». Esc — отмена.");
+    }
+
+    private void StopRecording()
+    {
+        if (recording is not { } command) return;
+        recording = null;
+        if (shortcutButtons.TryGetValue(command, out var button))
+        {
+            string chord = shell.Settings.Hotkeys.GetValueOrDefault(command, "");
+            button.Content = chord.Length == 0 ? "Не назначено" : chord;
+        }
+        shell.ResumeHotkeys();
+    }
+
+    private void OnPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (recording is { } command)
+        {
+            e.Handled = true;
+            var key = e.Key == Key.System ? e.SystemKey : e.Key;
+            if (key == Key.Escape && Keyboard.Modifiers == ModifierKeys.None) { StopRecording(); shell.SetStatus("Готово."); return; }
+            if (Chord.FromKeyPress(key, Keyboard.Modifiers) is { } chord)
+            {
+                recording = null;
+                shell.ChangeHotkey(command, chord.ToString()); // Checked while suspended.
+                shell.ResumeHotkeys();
+                RenderPage(keepPosition: true);
+            }
+            else if (key is not (Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt or Key.LeftShift or Key.RightShift))
+                shell.SetStatus("Нужен Ctrl или Alt вместе с обычной клавишей. Esc — отмена.");
+            return;
+        }
+        if (Keyboard.Modifiers == ModifierKeys.Control && e.Key is Key.W or Key.Q) { e.Handled = true; Close(); }
+    }
+
+    // ---- Screen reading ------------------------------------------------------------------
+
     private void Ocr()
     {
-        Heading("Чтение с экрана");
-        Text("Выберите язык распознавания. Область ограничена монитором, на котором находится указатель мыши. Esc и правая кнопка отменяют выбор.");
-        var languages = new ComboBox { ItemsSource = AppSettings.SupportedLanguages.ToArray(), DisplayMemberPath = "Value", SelectedValuePath = "Key", SelectedValue = shell.Settings.OcrLanguage, MinHeight = 36 };
-        AutomationProperties.SetName(languages, "Язык распознавания");
-        languages.SelectionChanged += (_, _) => { shell.Settings.OcrLanguage = (string)languages.SelectedValue; shell.Save(); }; page.Children.Add(languages);
-        Text("Захватывается только обведённая область. Изображение хранится в памяти на время распознавания.");
-        uint packageLength = 0;
-        Text(Platform.NativeMethods.GetCurrentPackageFullName(ref packageLength, 0) == 15700
-            ? "Для системного OCR запустите установленный пакет QuietSelection."
-            : "Установленный пакет готов к использованию системного OCR.");
-    }
-    private void VoiceHelp()
-    {
-        CreateVoiceHelp().ShowDialog();
-    }
-    internal Window CreateVoiceHelp()
-    {
-        var help = new Window { Owner = this, Title = "Установка локальных голосов", Width = 640, Height = Math.Min(680, SystemParameters.WorkArea.Height - 30), FontSize = 19, WindowStartupLocation = WindowStartupLocation.CenterOwner };
-        SystemTheme.ApplyWindow(help);
-        var panel = new StackPanel { Margin = new(24) };
-        panel.Children.Add(new TextBlock { Text = "Piper — локальные нейросетевые голоса для процессора. Русские: Denis, Dmitri, Irina (женский), Ruslan (мужской). Английский: LJSpeech.", TextWrapping = TextWrapping.Wrap });
-        panel.Children.Add(Button($"Голоса Piper — до {PiperModels.DownloadBytes / 1_000_000.0:F2} МБ…", async () => { help.Close(); await shell.InstallPiperAsync(); RenderPage(); }));
-        panel.Children.Add(new TextBlock { Text = "Silero — пять русских нейросетевых голосов: Айдар, Байя, Ксения, Xenia, Евгений. Одна общая модель; бесплатное некоммерческое использование (CC BY-NC-SA 4.0).", TextWrapping = TextWrapping.Wrap, Margin = new(0, 12, 0, 0) });
-        panel.Children.Add(Button($"Русские голоса Silero — {SileroModels.Catalog.File.Bytes / 1_000_000.0:F2} МБ…", async () => { help.Close(); await shell.InstallSileroAsync(); RenderPage(); }));
-        panel.Children.Add(new TextBlock { Text = "KittenTTS Mini 0.8 — восемь английских голосов: четыре женских и четыре мужских. Общая модель; Apache 2.0.", TextWrapping = TextWrapping.Wrap, Margin = new(0, 12, 0, 0) });
-        panel.Children.Add(Button("Английские голоса Kitten Mini — 81,55 МБ…", async () => { help.Close(); await shell.InstallAdditionalAsync(QuietSelection.App.Speech.SpeechEngine.Kitten); RenderPage(); }));
-        panel.Children.Add(new TextBlock { Text = "Pocket TTS — 21 английский голос, потоковое чтение. Модель — CC BY 4.0, код — MIT. Cosette и Jean: только некоммерческое использование. Условия и авторство голосов сохранены в third-party/pocket.", TextWrapping = TextWrapping.Wrap, Margin = new(0, 12, 0, 0) });
-        panel.Children.Add(Button("Английские голоса Pocket TTS — 350,90 МБ…", async () => { help.Close(); await shell.InstallAdditionalAsync(QuietSelection.App.Speech.SpeechEngine.Pocket); RenderPage(); }));
-        panel.Children.Add(new TextBlock { Text = "Kokoro INT8 — английские голоса США и Великобритании; все используют одну модель. Лицензия модели — Apache 2.0.", TextWrapping = TextWrapping.Wrap, Margin = new(0, 12, 0, 0) });
-        panel.Children.Add(Button("Английские голоса Kokoro — 120,58 МБ…", async () => { help.Close(); await shell.InstallAdditionalAsync(QuietSelection.App.Speech.SpeechEngine.Kokoro); RenderPage(); }));
-        panel.Children.Add(new TextBlock { Text = "VOICEVOX:四国めたん (женский) и VOICEVOX:玄野武宏 (мужской), обычные варианты. Для распространяемого аудио требуется кредит выбранного голоса. Условия VOICEVOX и персонажей: third-party/voicevox внутри приложения.", TextWrapping = TextWrapping.Wrap, Margin = new(0, 12, 0, 0) });
-        panel.Children.Add(Button("Японские голоса VOICEVOX — 116,43 МБ…", async () => { help.Close(); await shell.InstallAdditionalAsync(QuietSelection.App.Speech.SpeechEngine.Voicevox); RenderPage(); }));
-        // Silero English was rejected after listening tests and is no longer offered (see README).
-        panel.Children.Add(new TextBlock { Text = "Бесплатные голоса RHVoice — локальное чтение через SAPI 5. Движок включён в загрузку.", TextWrapping = TextWrapping.Wrap, Margin = new(0, 12, 0, 0) });
-        foreach (var package in RhVoiceInstallation.Packages)
-            panel.Children.Add(Button($"RHVoice {package.Name} — {AppSettings.SupportedLanguages[package.Language]}, {package.Bytes / 1_000_000.0:F2} МБ…",
-                async () => { help.Close(); await shell.InstallRhVoiceAsync(package); RenderPage(); }));
-        panel.Children.Add(new TextBlock { Text = "Японского голоса в каталоге RHVoice нет. Для японского доступен установленный голос Windows. После установки выберите голос и прослушайте тестовую фразу.", TextWrapping = TextWrapping.Wrap, Margin = new(0, 12, 0, 18) });
-        panel.Children.Add(new TextBlock { Text = "Помощник загрузит голос через Windows Update. Права администратора требуются только для установки. Само приложение остаётся без повышения прав.", TextWrapping = TextWrapping.Wrap });
-        panel.Children.Add(Button("Установить русский голос…", async () => { help.Close(); await shell.InstallVoiceAsync("ru"); RenderPage(); }));
-        panel.Children.Add(Button("Установить английский голос…", async () => { help.Close(); await shell.InstallVoiceAsync("en"); RenderPage(); }));
-        panel.Children.Add(Button("Установить японский голос…", async () => { help.Close(); await shell.InstallVoiceAsync("ja"); RenderPage(); }));
-        panel.Children.Add(new TextBlock { Text = "1. Откройте раздел «Речь» Windows.\n\n2. В блоке управления голосами выберите добавление голосов и нужный язык: русский или английский.\n\n3. Дождитесь завершения загрузки и вернитесь сюда.\n\nГолос считается доступным только после появления в списке QuietSelection и успешного прослушивания. Голоса Narrator могут быть недоступны другим приложениям.", TextWrapping = TextWrapping.Wrap });
-        panel.Children.Add(Button("Открыть установку голосов Windows", () => Process.Start(new ProcessStartInfo("ms-settings:speech") { UseShellExecute = true })));
-        panel.Children.Add(Button("Проверить доступные голоса", async () => { await shell.RefreshVoicesAsync(); RenderPage(); help.Close(); }));
-        panel.Children.Add(Button("Закрыть", help.Close)); help.Content = new ScrollViewer { Content = panel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto }; return help;
-    }
-    private void Heading(string text, double size = 27) => page.Children.Add(new TextBlock { Text = text, FontSize = size, FontWeight = FontWeights.SemiBold, Margin = new(0, 0, 0, 14), TextWrapping = TextWrapping.Wrap });
-    private void Text(string text) => page.Children.Add(new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, Margin = new(0, 0, 0, 14) });
-    private void SelectableText(string text)
-    {
-        var field = new TextBox { Text = text, IsReadOnly = true, TextWrapping = TextWrapping.Wrap, BorderThickness = new(0), Background = Brushes.Transparent, ContextMenu = null, AllowDrop = false, Margin = new(0, 0, 0, 14) };
-        AutomationProperties.SetName(field, "Описание приложения, доступное для выделения"); page.Children.Add(field);
-    }
-    private static Button Button(string label, Action click)
-    {
-        var button = new Button { Content = label, Padding = new(12, 7, 12, 7), Margin = new(0, 5, 8, 5), HorizontalAlignment = HorizontalAlignment.Left, MinHeight = 38 };
-        button.Click += (_, _) => click(); return button;
-    }
-    private sealed record VoiceChoice(string Id, string Label)
-    {
-        public override string ToString() => Label;
+        Add(Ui.PageTitle("Чтение с экрана"));
+        if (NativeMethods.IsPackaged)
+            Add(Ui.InfoBar(Ui.Tone.Success, "Системное распознавание доступно", null));
+        else
+            Add(Ui.InfoBar(Ui.Tone.Caution, "Нужна установленная версия", "Распознавание текста Windows работает только в установленном пакете QuietSelection."));
+        var languages = new ComboBox { ItemsSource = AppSettings.SupportedLanguages.ToArray(), DisplayMemberPath = "Value", SelectedValuePath = "Key", SelectedValue = shell.Settings.OcrLanguage, MinWidth = 180 };
+        languages.SelectionChanged += (_, _) => { shell.Settings.OcrLanguage = (string)languages.SelectedValue; shell.Save(); };
+        Add(Ui.SettingRow("\uE8C1", "Язык распознавания", "Язык текста в выбранной области.", languages));
+        string chord = shell.Settings.Hotkeys.GetValueOrDefault(ReadingCommand.Region, "");
+        Add(Ui.SettingRow("\uE7A8", "Как пользоваться",
+            (chord.Length > 0 ? "Нажмите " + chord : "Назначьте сочетание «Распознать и прочитать область»") + " и обведите область на мониторе с указателем. Esc или правая кнопка мыши — отмена.",
+            chord.Length > 0 ? null : Ui.Button("Назначить…", () => OpenSection(3))));
+        var privacy = Ui.Secondary("Захватывается только обведённая область. Изображение хранится в памяти на время распознавания.");
+        privacy.Margin = new(4, 8, 0, 0);
+        Add(privacy);
     }
 }

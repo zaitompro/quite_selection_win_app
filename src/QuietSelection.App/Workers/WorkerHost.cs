@@ -99,7 +99,7 @@ internal static class WorkerHost
                 int speechResult = request.VoiceId.StartsWith("sapi5:", StringComparison.Ordinal)
                     ? NativeMethods.qs_sapi_synthesize(request.VoiceId[6..], request.Text, request.Speed, out audio, out length)
                     : NativeMethods.qs_synthesize(request.VoiceId, request.Text, LanguagePlanner.SpeakingRate(request.Speed), out audio, out length);
-                if (speechResult == unchecked((int)0x80070490)) throw new QuietException(ErrorCode.VoiceMissing);
+                if (speechResult == NativeMethods.ErrorNotFoundHResult) throw new QuietException(ErrorCode.VoiceMissing);
                 NativeMethods.Check(speechResult, ErrorCode.SpeechFailure);
                 try
                 {
@@ -117,8 +117,7 @@ internal static class WorkerHost
                 }
                 finally { NativeMethods.qs_free(audio); }
             case "ocr":
-                uint packageLength = 0;
-                if (NativeMethods.GetCurrentPackageFullName(ref packageLength, 0) == 15700)
+                if (!NativeMethods.IsPackaged)
                     throw new QuietException(ErrorCode.PackageIdentityRequired);
                 var region = request.Region ?? throw new QuietException(ErrorCode.CaptureFailed);
                 NativeMethods.Check(NativeMethods.qs_ocr_languages(out var availableLanguages, out var maximumDimension), ErrorCode.OcrUnavailable);

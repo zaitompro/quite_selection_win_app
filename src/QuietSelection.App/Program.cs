@@ -38,7 +38,8 @@ internal static class Program
                 else
                 {
                     var shell = new AppShell(app);
-                    app.Startup += async (_, _) => await shell.StartAsync(args.Contains("--tray"));
+                    bool inTray = args.Contains("--tray") || Platform.StartupTaskClient.LaunchedAtSignIn();
+                    app.Startup += async (_, _) => await shell.StartAsync(inTray);
                     app.Exit += (_, _) => shell.Dispose();
                     app.SessionEnding += (_, _) => app.Shutdown();
                 }

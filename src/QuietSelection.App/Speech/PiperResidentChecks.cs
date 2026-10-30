@@ -185,7 +185,7 @@ internal static class PiperResidentChecks
                 });
             }
             await Test("resident.light_dark_settings", () => ThemeChecks.RunAsync(app, reportDirectory));
-            uint length = 0; bool packaged = Platform.NativeMethods.GetCurrentPackageFullName(ref length, 0) != 15700;
+            bool packaged = Platform.NativeMethods.IsPackaged;
             await File.WriteAllTextAsync(Path.Combine(reportDirectory, "piper-resident.json"), JsonSerializer.Serialize(new
             {
                 syntheticDataOnly = true, packaged, completedUtc = DateTimeOffset.UtcNow,

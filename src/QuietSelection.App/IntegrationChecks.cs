@@ -105,8 +105,7 @@ internal static class IntegrationChecks
             });
             if (args.Contains("--selection-tests"))
             {
-                uint length = 0;
-                bool identity = NativeMethods.GetCurrentPackageFullName(ref length, 0) != 15700;
+                bool identity = NativeMethods.IsPackaged;
                 worker.Dispose();
                 await File.WriteAllTextAsync(Path.Combine(reportDirectory, "selection.json"),
                     JsonSerializer.Serialize(new { syntheticDataOnly = true, packaged = identity, checks },
@@ -216,14 +215,12 @@ internal static class IntegrationChecks
             }
             await Test("ocr.refuses_capture_without_source", async () =>
             {
-                uint length = 0;
-                bool packaged = NativeMethods.GetCurrentPackageFullName(ref length, 0) != 15700;
+                bool packaged = NativeMethods.IsPackaged;
                 try { await worker.CallAsync(new("ocr", Region: new PixelRegion(0, 0, 80, 80), Language: "en-US"), TimeSpan.FromSeconds(5), CancellationToken.None); return false; }
                 catch (QuietException ex) { return ex.Code == ErrorCode.SourceChanged || (!packaged && ex.Code == ErrorCode.PackageIdentityRequired); }
             });
             await Test("wpf.light_dark_all_sections", () => ThemeChecks.RunAsync(app, reportDirectory));
-            uint packageLength = 0;
-            bool packaged = NativeMethods.GetCurrentPackageFullName(ref packageLength, 0) != 15700;
+            bool packaged = NativeMethods.IsPackaged;
             await File.WriteAllTextAsync(Path.Combine(reportDirectory, "windows-api.json"), JsonSerializer.Serialize(new { syntheticDataOnly = true, packaged, completedUtc = DateTimeOffset.UtcNow, checks }, new JsonSerializerOptions { WriteIndented = true }));
             window.Close(); app.Shutdown(failed ? 1 : 0);
         }

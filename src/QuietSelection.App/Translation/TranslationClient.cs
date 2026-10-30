@@ -10,7 +10,7 @@ internal sealed class TranslationClient(string modelRoot)
 {
     internal string LastFailure { get; private set; } = "";
     internal long PeakWorkingSetBytes { get; private set; }
-    internal static string DefaultModelRoot => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "QuietSelection", "models", "argos-v1");
+    internal static string DefaultModelRoot => Platform.AppPaths.Models("argos-v1");
 
     internal async Task<string> TranslateAsync(IReadOnlyList<TranslationSegment> segments, string target, CancellationToken token)
     {

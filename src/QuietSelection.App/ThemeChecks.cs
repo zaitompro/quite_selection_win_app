@@ -53,7 +53,7 @@ internal static class ThemeChecks
                     using var stream = File.Create(Path.Combine(reportDirectory, $"theme-{(dark ? "dark" : "light")}-{section}.png"));
                     encoder.Save(stream);
                 }
-                var help = settings.CreateVoiceHelp(); help.ShowActivated = false;
+                var help = settings.CreateVoiceCatalog(); help.ShowActivated = false;
                 try
                 {
                     SystemTheme.Preview(help, dark); help.Show();

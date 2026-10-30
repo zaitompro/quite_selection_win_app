@@ -16,7 +16,7 @@ internal static class SileroModels
     internal static IEnumerable<SileroCatalog> Catalogs => [Catalog, EnglishCatalog];
     internal static IEnumerable<SileroVoice> AllVoices => Catalogs.SelectMany(x => x.Voices);
     internal static SileroCatalog ForLanguage(string language) => language switch { "ru" => Catalog, "en" => EnglishCatalog, _ => throw new ArgumentException("UNSUPPORTED_SILERO_LANGUAGE") };
-    internal static string Root => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "QuietSelection", "models", "silero-v5");
+    internal static string Root => Platform.AppPaths.Models("silero-v5");
     internal static bool RuntimeAvailable => File.Exists(Path.Combine(AppContext.BaseDirectory, "translation-runtime", "python.exe"))
         && File.Exists(Path.Combine(AppContext.BaseDirectory, "silero-runtime", "torch", "__init__.py"));
     private static SileroCatalog Load(string resource)

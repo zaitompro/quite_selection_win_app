@@ -23,7 +23,7 @@ internal static class AdditionalModels
         using var stream = typeof(AdditionalModels).Assembly.GetManifestResourceStream("QuietSelection." + name + ".json")!;
         return JsonSerializer.Deserialize<AdditionalCatalog>(stream)!;
     }
-    internal static string Root(SpeechEngine engine) => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "QuietSelection", "models",
+    internal static string Root(SpeechEngine engine) => Path.Combine(Platform.AppPaths.DataRoot, "models",
         engine switch { SpeechEngine.Kokoro => "kokoro-v1", SpeechEngine.Kitten => "kitten-mini-0.8", SpeechEngine.Pocket => "pocket-english-2026-09_2", SpeechEngine.Voicevox => "voicevox-v1", _ => throw new ArgumentOutOfRangeException(nameof(engine)) });
     internal static bool RuntimeAvailable(SpeechEngine engine) => File.Exists(Path.Combine(AppContext.BaseDirectory, "translation-runtime", "python.exe"))
         && File.Exists(Path.Combine(AppContext.BaseDirectory, engine == SpeechEngine.Pocket ? "pocket-runtime/pocket_tts/__init__.py" : engine is SpeechEngine.Kokoro or SpeechEngine.Kitten ? "piper-runtime/piper/espeakbridge.pyd" : "voicevox-runtime/voicevox_core.dll"))

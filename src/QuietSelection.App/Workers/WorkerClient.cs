@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO.Pipes;
 using QuietSelection.App.Platform;
+using QuietSelection.App.Speech;
 
 namespace QuietSelection.App.Workers;
 
@@ -39,8 +40,8 @@ internal sealed class WorkerClient(IReadOnlyDictionary<Speech.SpeechEngine, stri
             residentAdditionalIds = [];
             foreach (var pair in additional)
             {
-                string prefix = pair.Key.ToString().ToLowerInvariant();
-                string[] selected = ids.Where(x => x.StartsWith(prefix + ":", StringComparison.Ordinal)).ToArray();
+                string prefix = pair.Key.Prefix();
+                string[] selected = ids.Where(x => Speech.SpeechEngines.FromVoiceId(x) == pair.Key).ToArray();
                 if (selected.Length == 0) await pair.Value.ResetAsync(token);
                 else await pair.Value.CallAsync(new(prefix + "-configure", VoiceIds: selected), TimeSpan.FromMinutes(3), token);
             }
@@ -112,15 +113,7 @@ internal sealed class WorkerClient(IReadOnlyDictionary<Speech.SpeechEngine, stri
             {
                 foreach (var segment in LanguagePlanner.BatchForPrefetch(segments))
                 {
-                    Speech.PythonSpeechClient? client = null;
-                    bool resident = false;
-                    if (segment.VoiceId.StartsWith("piper:", StringComparison.Ordinal))
-                    { client = piper; resident = residentVoiceIds.Contains(segment.VoiceId); }
-                    else if (segment.VoiceId.StartsWith("silero:", StringComparison.Ordinal))
-                    { client = silero; resident = residentSileroIds.Contains(segment.VoiceId); }
-                    else foreach (var pair in additional)
-                        if (segment.VoiceId.StartsWith(pair.Key.ToString().ToLowerInvariant() + ":", StringComparison.Ordinal))
-                        { client = pair.Value; resident = residentAdditionalIds.Contains(segment.VoiceId); break; }
+                    var (client, resident) = Route(segment.VoiceId);
                     try
                     {
                         foreach (var part in BoundRequests(segment.Text, client is null ? NativeRequestCharacters : 1000))
@@ -163,6 +156,15 @@ internal sealed class WorkerClient(IReadOnlyDictionary<Speech.SpeechEngine, stri
         finally { workerSlot.Release(); }
     }
 
+    // Python worker for a voice and whether its model is kept loaded; (null, false) for WinRT/SAPI.
+    private (Speech.PythonSpeechClient? Client, bool Resident) Route(string voiceId) => Speech.SpeechEngines.FromVoiceId(voiceId) switch
+    {
+        Speech.SpeechEngine.Piper => (piper, residentVoiceIds.Contains(voiceId)),
+        Speech.SpeechEngine.Silero => (silero, residentSileroIds.Contains(voiceId)),
+        { } engine => (additional[engine], residentAdditionalIds.Contains(voiceId)),
+        null => (null, false)
+    };
+
     private static IEnumerable<string> BoundRequests(string text, int limit)
     {
         for (int start = 0; start < text.Length;)
@@ -187,24 +189,12 @@ internal sealed class WorkerClient(IReadOnlyDictionary<Speech.SpeechEngine, stri
             if (result.Error != ErrorCode.None) throw new QuietException(result.Error);
             return result;
         }
-        if (request.Kind is "speak" or "synthesize-test")
-            foreach (var pair in additional)
-                if (request.VoiceId.StartsWith(pair.Key.ToString().ToLowerInvariant() + ":", StringComparison.Ordinal))
-                {
-                    if (residentAdditionalIds.Contains(request.VoiceId)) return await pair.Value.CallAsync(request, timeout, token);
-                    using var cold = new Speech.PythonSpeechClient(pair.Key);
-                    return await cold.CallAsync(request, timeout, token);
-                }
-        if (request.Kind is "speak" or "synthesize-test" && request.VoiceId.StartsWith("silero:", StringComparison.Ordinal))
+        if (request.Kind is "speak" or "synthesize-test" && Speech.SpeechEngines.FromVoiceId(request.VoiceId) is { } engine)
         {
-            if (residentSileroIds.Contains(request.VoiceId)) return await silero.CallAsync(request, timeout, token);
-            using var cold = new Speech.SileroClient();
-            return await cold.CallAsync(request, timeout, token);
-        }
-        if (request.Kind is "speak" or "synthesize-test" && request.VoiceId.StartsWith("piper:", StringComparison.Ordinal))
-        {
-            if (residentVoiceIds.Contains(request.VoiceId)) return await piper.CallAsync(request, timeout, token);
-            using var cold = new Speech.PiperClient();
+            var (client, resident) = Route(request.VoiceId);
+            if (resident) return await client!.CallAsync(request, timeout, token);
+            // A voice that is not kept loaded runs in its own short-lived worker.
+            using var cold = new Speech.PythonSpeechClient(engine, modelRoots?.GetValueOrDefault(engine));
             return await cold.CallAsync(request, timeout, token);
         }
         var name = "QuietSelection-" + Guid.NewGuid().ToString("N");

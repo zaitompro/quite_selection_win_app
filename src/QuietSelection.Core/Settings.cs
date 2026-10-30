@@ -23,6 +23,7 @@ public sealed class AppSettings
         [new() { Language = "en" }, new() { Language = "ja" }];
     public Dictionary<ReadingCommand, string> Hotkeys { get; set; } = [];
     public bool StartAtLogin { get; set; }
+    public bool ShowReadingIndicator { get; set; } = true;
     public string OcrLanguage { get; set; } = "ru";
 
     public AppSettings Snapshot() => JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(this))!;
@@ -60,6 +61,19 @@ public sealed class SettingsStore(string path)
         }
         catch (QuietException) { throw; }
         catch { throw new QuietException(ErrorCode.InvalidSettings); }
+    }
+
+    /// <summary>
+    /// Keeps an unreadable settings file for inspection and frees the path for defaults.
+    /// Returns the new location, or null when there was no file.
+    /// </summary>
+    public string? MoveAside()
+    {
+        if (!File.Exists(path)) return null;
+        string target = path + ".corrupt-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", System.Globalization.CultureInfo.InvariantCulture);
+        for (int i = 1; File.Exists(target); i++) target = path + ".corrupt-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", System.Globalization.CultureInfo.InvariantCulture) + "-" + i;
+        File.Move(path, target);
+        return target;
     }
 
     public void Save(AppSettings settings)

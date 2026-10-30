@@ -11,7 +11,7 @@ internal sealed record PiperModel(string Id, string Language, string Name, Piper
 internal static class PiperModels
 {
     internal static readonly PiperModel[] Catalog = Load();
-    internal static string Root => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "QuietSelection", "models", "piper-v1");
+    internal static string Root => Platform.AppPaths.Models("piper-v1");
     internal static long DownloadBytes => Catalog.Sum(x => x.Files.Sum(f => f.Bytes));
     internal static bool RuntimeAvailable => File.Exists(Path.Combine(AppContext.BaseDirectory, "translation-runtime", "python.exe"))
         && File.Exists(Path.Combine(AppContext.BaseDirectory, "piper-runtime", "piper", "voice.py"));

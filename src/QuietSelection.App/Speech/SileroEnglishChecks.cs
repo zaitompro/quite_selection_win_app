@@ -16,7 +16,7 @@ internal static class SileroEnglishChecks
         app.Startup += async (_, _) =>
         {
             var checks = new List<object>(); var measurements = new List<object>(); bool failed = false;
-            uint length = 0; bool packaged = Platform.NativeMethods.GetCurrentPackageFullName(ref length, 0) != 15700;
+            bool packaged = Platform.NativeMethods.IsPackaged;
             async Task Report(bool complete) => await File.WriteAllTextAsync(Path.Combine(directory, "silero-english.json"), JsonSerializer.Serialize(new
             {
                 syntheticDataOnly = true, packaged, complete, completedUtc = DateTimeOffset.UtcNow,

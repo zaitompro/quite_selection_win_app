@@ -1,17 +1,21 @@
 using System.Security.Principal;
-using System.Diagnostics;
+using System.Text.RegularExpressions;
 using System.Windows;
 using QuietSelection.App.Platform;
-using QuietSelection.App.Views;
-using QuietSelection.App.Workers;
+using QuietSelection.App.Speech;
+using QuietSelection.App.Speech.Downloads;
 using QuietSelection.App.Translation;
 using QuietSelection.App.Translation.Downloads;
-using QuietSelection.App.Speech.Downloads;
-using Forms = System.Windows.Forms;
+using QuietSelection.App.Views;
+using QuietSelection.App.Workers;
 
 namespace QuietSelection.App;
 
-internal sealed class AppShell : IDisposable
+/// <summary>
+/// Application state: settings, hotkeys, the tray, resident voices, downloads and reading operations.
+/// Windows only display this state and call its methods.
+/// </summary>
+internal sealed partial class AppShell : IDisposable
 {
     private readonly Application application;
     private readonly SettingsStore store;
@@ -19,89 +23,118 @@ internal sealed class AppShell : IDisposable
     private readonly OperationController operations = new();
     private readonly Mutex mutex;
     private readonly bool ownsMutex;
-    private EventWaitHandle? openSettings;
-    private Forms.NotifyIcon? tray;
+    private readonly EventWaitHandle? openSettings;
+    private TrayIcon? tray;
+    private ReadingIndicator? indicator;
     private HotkeyManager? hotkeys;
     private SettingsWindow? settingsWindow;
-    private bool settingsWritable = true;
-    private bool preparingVoice;
-    private CancellationTokenSource? voiceDownload;
-    private Task? voicePreparation;
-    internal bool PreparingVoice => preparingVoice;
-    internal bool CanCancelVoiceDownload => voiceDownload is not null;
-    internal void CancelVoiceDownload() => voiceDownload?.Cancel();
-    private CancellationTokenSource? modelPreparation;
-    private Task? modelTask;
     private bool exiting;
     private bool running;
-    private string? piperSignature;
-    private CancellationTokenSource? piperCacheCancellation;
-    private Task? piperCacheTask;
-    private string? sileroSignature;
-    private CancellationTokenSource? sileroCacheCancellation;
-    private Task? sileroCacheTask;
-    private string? additionalSignature;
-    private CancellationTokenSource? additionalCacheCancellation;
-    private Task? additionalCacheTask;
-    internal string AdditionalStatus { get; private set; } = "Kitten / Pocket / Kokoro / VOICEVOX: модели загружаются при выборе голосов.";
-    internal string SileroStatus { get; private set; } = "Silero: модели загружаются при выборе голосов.";
-    internal string PiperStatus { get; private set; } = "Piper: модели загружаются при выборе голоса.";
-    internal string ModelStatus { get; private set; } = "Проверка…";
-    internal bool ModelsReady { get; private set; }
-    internal bool PreparingModels => modelPreparation is not null;
+
+    // Voice sets kept in memory per worker.
+    private readonly ResidentModels piperModels, sileroModels, additionalModels;
+
+    // One voice download/installation at a time.
+    private CancellationTokenSource? voiceDownload;
+    private Task? voicePreparation;
+
+    // Translation model preparation or verification.
+    private CancellationTokenSource? modelPreparation;
+    private Task? modelTask;
+
     internal AppSettings Settings { get; private set; } = new();
+    internal bool SettingsWritable { get; private set; } = true;
     internal VoiceInfo[] Voices { get; private set; } = [];
     internal string Status { get; private set; } = "Готово.";
+    internal OperationState State { get; private set; }
+    internal bool Busy => State != OperationState.Idle;
     internal event Action? Changed;
+
+    internal string ModelStatus { get; private set; } = "Ожидает проверки.";
+    internal bool ModelsReady { get; private set; }
+    internal bool PreparingModels => modelPreparation is not null;
+
+    /// <summary>Key of the voice package being prepared (see <see cref="VoiceCatalog"/>), or null.</summary>
+    internal string? ActiveVoicePackage { get; private set; }
+    internal string VoiceProgress { get; private set; } = "";
+    internal int? VoiceProgressPercent { get; private set; }
+    internal bool PreparingVoice => ActiveVoicePackage is not null;
+    internal bool CanCancelVoiceDownload => voiceDownload is not null;
+    internal void CancelVoiceDownload() => voiceDownload?.Cancel();
+
+    internal IEnumerable<ResidentModels> ResidentVoiceSets => [sileroModels, piperModels, additionalModels];
 
     internal AppShell(Application app)
     {
         application = app;
+        piperModels = new("Piper", worker.ConfigurePiperAsync, RaiseChanged);
+        sileroModels = new("Silero", worker.ConfigureSileroAsync, RaiseChanged);
+        additionalModels = new("Kitten, Pocket, Kokoro, VOICEVOX", worker.ConfigureAdditionalAsync, RaiseChanged);
         var suffix = WindowsIdentity.GetCurrent().User!.Value;
         mutex = new(true, "Local\\QuietSelection.Instance." + suffix, out ownsMutex);
-        store = new(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "QuietSelection", "settings.json"));
+        store = new(AppPaths.Settings);
         if (!ownsMutex)
         {
             try { EventWaitHandle.OpenExisting("Local\\QuietSelection.Settings." + suffix).Set(); } catch { }
             return;
         }
-        openSettings = new(false, EventResetMode.AutoReset, "Local\\QuietSelection.Settings." + suffix);
+        var signal = openSettings = new(false, EventResetMode.AutoReset, "Local\\QuietSelection.Settings." + suffix);
         _ = Task.Run(() =>
         {
-            try { while (openSettings.WaitOne()) application.Dispatcher.BeginInvoke(ShowSettings); }
+            try { while (signal.WaitOne()) application.Dispatcher.BeginInvoke(ShowSettings); }
             catch (ObjectDisposedException) { }
         });
+        LoadSettings();
+        operations.Changed += (state, error) => application.Dispatcher.BeginInvoke(() => OnOperationChanged(state, error));
+    }
+
+    private void LoadSettings()
+    {
         try
         {
             Settings = store.Load();
-            bool migrated = false;
-            foreach (var language in new[] { Settings.Primary }.Concat(Settings.Additional))
-            {
-                const string oldPrefix = "kitten:micro-0.8:";
-                if (!language.VoiceId.StartsWith(oldPrefix, StringComparison.Ordinal)) continue;
-                string replacement = "kitten:mini-0.8:" + language.VoiceId[oldPrefix.Length..];
-                if (!AdditionalModels.Kitten.Voices.Any(v => v.Id == replacement)) continue;
-                language.VoiceId = replacement; migrated = true;
-            }
-            if (migrated) store.Save(Settings);
+            if (MigrateKittenMicro(Settings)) store.Save(Settings);
         }
-        catch (QuietException ex) { Status = Messages.For(ex.Code); settingsWritable = false; }
-        operations.Changed += (state, error) => application.Dispatcher.BeginInvoke(() =>
-        {
-            Status = error != ErrorCode.None ? Messages.For(error) : state switch
-            {
-                OperationState.ReadingSelection => "Получение выделения…",
-                OperationState.SelectingRegion => "Выберите область экрана.",
-                OperationState.Recognizing => "Распознавание…",
-                OperationState.Translating => "Перевод…",
-                OperationState.Speaking => "Чтение…",
-                _ => "Готово."
-            };
-            Changed?.Invoke();
-            if (error != ErrorCode.None && error != ErrorCode.Cancelled && settingsWindow is null && tray is not null)
-                tray.ShowBalloonTip(3000, "QuietSelection", Status, Forms.ToolTipIcon.Info);
-        });
+        catch (QuietException ex) { Status = Messages.For(ex.Code); SettingsWritable = false; }
     }
+
+    // Kitten Micro was removed after listening tests; its profiles map to Mini voices of the same name.
+    private static bool MigrateKittenMicro(AppSettings settings)
+    {
+        const string oldPrefix = "kitten:micro-0.8:";
+        bool migrated = false;
+        foreach (var language in new[] { settings.Primary }.Concat(settings.Additional))
+        {
+            if (!language.VoiceId.StartsWith(oldPrefix, StringComparison.Ordinal)) continue;
+            string replacement = "kitten:mini-0.8:" + language.VoiceId[oldPrefix.Length..];
+            if (!AdditionalModels.Kitten.Voices.Any(v => v.Id == replacement)) continue;
+            language.VoiceId = replacement; migrated = true;
+        }
+        return migrated;
+    }
+
+    private void OnOperationChanged(OperationState state, ErrorCode error)
+    {
+        State = state;
+        Status = error != ErrorCode.None ? Messages.For(error) : state switch
+        {
+            OperationState.ReadingSelection => "Получение выделения…",
+            OperationState.SelectingRegion => "Выберите область экрана.",
+            OperationState.Recognizing => "Распознавание…",
+            OperationState.Translating => "Перевод…",
+            OperationState.Speaking => "Чтение…",
+            _ => "Готово."
+        };
+        tray?.SetState(Busy, Status);
+        // Hidden while a region is chosen or captured, so it never ends up in the OCR image.
+        if (Settings.ShowReadingIndicator && state is OperationState.Translating or OperationState.Speaking)
+            (indicator ??= new ReadingIndicator(Stop)).ShowState(state == OperationState.Translating ? "Перевод…" : "Чтение…");
+        else indicator?.Hide();
+        RaiseChanged();
+        if (error is not (ErrorCode.None or ErrorCode.Cancelled) && settingsWindow is null) tray?.Notify(Status);
+    }
+
+    private void RaiseChanged() => Changed?.Invoke();
 
     internal async Task StartAsync(bool inTray)
     {
@@ -110,12 +143,8 @@ internal sealed class AppShell : IDisposable
         hotkeys = new(); hotkeys.Invoked += command => _ = ReadAsync(command);
         foreach (var binding in Settings.Hotkeys)
             if (!hotkeys.Set(binding.Key, binding.Value)) Status = "Не удалось зарегистрировать сочетание " + binding.Value;
-        var menu = new Forms.ContextMenuStrip();
-        menu.Items.Add("QuietSelection 0.1.0", null, (_, _) => { }).Enabled = false;
-        menu.Items.Add("Настройки…", null, (_, _) => ShowSettings());
-        menu.Items.Add("Завершить", null, (_, _) => Exit());
-        tray = new() { Text = "QuietSelection 0.1.0", Icon = System.Drawing.SystemIcons.Information, ContextMenuStrip = menu, Visible = true };
-        tray.MouseClick += (_, e) => { if (e.Button == Forms.MouseButtons.Left) menu.Show(Forms.Cursor.Position); };
+        tray = new TrayIcon(ShowSettings, Stop, Exit);
+        await RefreshStartupAsync();
         if (!inTray) ShowSettings();
         await RefreshVoicesAsync();
         await CheckModelsAsync();
@@ -127,143 +156,108 @@ internal sealed class AppShell : IDisposable
         {
             settingsWindow = new(this); settingsWindow.Closed += (_, _) => settingsWindow = null;
         }
-        settingsWindow.OpenGeneral(); settingsWindow.Show();
+        settingsWindow.Show();
         if (settingsWindow.WindowState == WindowState.Minimized) settingsWindow.WindowState = WindowState.Normal;
         settingsWindow.Activate();
     }
+
+    // Confirmation dialogs belong to whichever of our windows is in front (settings or voice catalog).
+    private Window? DialogOwner => application.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive && w is not ReadingIndicator) ?? settingsWindow;
+    private bool Confirm(string text, string title) =>
+        (DialogOwner is { } owner ? MessageBox.Show(owner, text, title, MessageBoxButton.YesNo, MessageBoxImage.Question)
+            : MessageBox.Show(text, title, MessageBoxButton.YesNo, MessageBoxImage.Question)) == MessageBoxResult.Yes;
 
     internal async Task RefreshVoicesAsync()
     {
         try { Voices = (await worker.CallAsync(new("voices"), TimeSpan.FromSeconds(10), CancellationToken.None)).Voices ?? []; }
         catch (QuietException ex) { Status = Messages.For(ex.Code); }
-        UpdatePiperCache();
-        UpdateSileroCache();
-        UpdateAdditionalCache();
-        Changed?.Invoke();
+        UpdateResidentVoices();
+        RaiseChanged();
     }
 
     internal void Save()
     {
-        if (!settingsWritable) { SetStatus(Messages.For(ErrorCode.InvalidSettings)); return; }
+        if (!SettingsWritable) { SetStatus(Messages.For(ErrorCode.InvalidSettings)); return; }
         try { store.Save(Settings); }
         catch { SetStatus("Не удалось сохранить настройки."); }
-        UpdatePiperCache();
-        UpdateSileroCache();
-        UpdateAdditionalCache();
+        UpdateResidentVoices();
     }
 
-    private void UpdatePiperCache()
+    /// <summary>Moves an unreadable settings file aside and starts from defaults.</summary>
+    internal void ResetSettings()
     {
-        if (!running || exiting || preparingVoice) return;
-        string[] ids = Settings.KeepPiperLoaded ? Settings.ActiveLanguages.Select(x => x.VoiceId)
-            .Where(x => x.StartsWith("piper:", StringComparison.Ordinal)).Distinct().Order().ToArray() : [];
-        string signature = string.Join("|", ids);
-        if (signature == piperSignature) return;
-        piperSignature = signature;
-        piperCacheCancellation?.Cancel();
-        var cancellation = new CancellationTokenSource(); piperCacheCancellation = cancellation;
-        piperCacheTask = ConfigurePiperAsync(ids, cancellation);
+        string? aside;
+        try { aside = store.MoveAside(); }
+        catch { SetStatus("Не удалось переместить повреждённый файл настроек."); return; }
+        Settings = new();
+        SettingsWritable = true;
+        foreach (var command in Enum.GetValues<ReadingCommand>()) hotkeys?.Set(command, "");
+        Save();
+        SetStatus(aside is null ? "Настройки сброшены." : "Настройки сброшены. Прежний файл сохранён: " + Path.GetFileName(aside));
     }
 
-    private async Task ConfigurePiperAsync(string[] ids, CancellationTokenSource cancellation)
+    // Keep only the voices selected for active languages loaded, per worker and option.
+    private void UpdateResidentVoices()
     {
-        PiperStatus = ids.Length == 0 ? "Piper: освобождение памяти…" : "Piper: предварительная загрузка выбранных голосов…";
-        Changed?.Invoke();
-        try
-        {
-            await worker.ConfigurePiperAsync(ids, cancellation.Token);
-            if (piperCacheCancellation != cancellation) return;
-            PiperStatus = ids.Length == 0 ? "Piper: в памяти нет моделей." : $"Piper готов: в памяти голосов — {ids.Length}.";
-        }
-        catch (OperationCanceledException) { }
-        catch (QuietException ex) { if (piperCacheCancellation == cancellation) { PiperStatus = Messages.For(ex.Code); piperSignature = null; } }
-        catch { if (piperCacheCancellation == cancellation) { PiperStatus = "Не удалось предварительно загрузить Piper. Повторите выбор голоса."; piperSignature = null; } }
-        finally
-        {
-            if (piperCacheCancellation == cancellation) piperCacheCancellation = null;
-            cancellation.Dispose(); Changed?.Invoke();
-        }
-    }
-    private void UpdateSileroCache()
-    {
-        if (!running || exiting || preparingVoice) return;
-        string[] ids = Settings.KeepSileroLoaded ? Settings.ActiveLanguages.Select(x => x.VoiceId)
-            .Where(x => x.StartsWith("silero:", StringComparison.Ordinal)).Distinct().Order().ToArray() : [];
-        string signature = string.Join("|", ids);
-        if (signature == sileroSignature) return;
-        sileroSignature = signature;
-        sileroCacheCancellation?.Cancel();
-        var cancellation = new CancellationTokenSource(); sileroCacheCancellation = cancellation;
-        sileroCacheTask = ConfigureSileroAsync(ids, cancellation);
+        if (!running || exiting || PreparingVoice) return;
+        string[] Selected(bool keep, Func<SpeechEngine, bool> engine) => keep
+            ? Settings.ActiveLanguages.Select(x => x.VoiceId).Where(id => SpeechEngines.FromVoiceId(id) is { } e && engine(e)).Distinct().Order().ToArray()
+            : [];
+        piperModels.Update(Selected(Settings.KeepPiperLoaded, e => e == SpeechEngine.Piper));
+        sileroModels.Update(Selected(Settings.KeepSileroLoaded, e => e == SpeechEngine.Silero));
+        additionalModels.Update(Selected(Settings.KeepAdditionalSpeechLoaded, e => e.IsAdditional()));
     }
 
-    private async Task ConfigureSileroAsync(string[] ids, CancellationTokenSource cancellation)
-    {
-        SileroStatus = ids.Length == 0 ? "Silero: освобождение памяти…" : "Silero: предварительная загрузка выбранных голосов…";
-        Changed?.Invoke();
-        try
-        {
-            await worker.ConfigureSileroAsync(ids, cancellation.Token);
-            if (sileroCacheCancellation != cancellation) return;
-            SileroStatus = ids.Length == 0 ? "Silero: в памяти нет моделей." : "Silero готов: выбранные модели в памяти.";
-        }
-        catch (OperationCanceledException) { }
-        catch (QuietException ex) { if (sileroCacheCancellation == cancellation) { SileroStatus = Messages.For(ex.Code); sileroSignature = null; } }
-        catch { if (sileroCacheCancellation == cancellation) { SileroStatus = "Не удалось предварительно загрузить Silero. Повторите выбор голоса."; sileroSignature = null; } }
-        finally
-        {
-            if (sileroCacheCancellation == cancellation) sileroCacheCancellation = null;
-            cancellation.Dispose(); Changed?.Invoke();
-        }
-    }
-    private void UpdateAdditionalCache()
-    {
-        if (!running || exiting || preparingVoice) return;
-        string[] ids = Settings.KeepAdditionalSpeechLoaded ? Settings.ActiveLanguages.Select(x => x.VoiceId)
-            .Where(x => (x.StartsWith("kokoro:", StringComparison.Ordinal) || x.StartsWith("voicevox:", StringComparison.Ordinal) || x.StartsWith("kitten:", StringComparison.Ordinal) || x.StartsWith("pocket:", StringComparison.Ordinal))).Distinct().Order().ToArray() : [];
-        string signature = string.Join("|", ids);
-        if (signature == additionalSignature) return;
-        additionalSignature = signature;
-        additionalCacheCancellation?.Cancel();
-        var cancellation = new CancellationTokenSource(); additionalCacheCancellation = cancellation;
-        additionalCacheTask = ConfigureAdditionalAsync(ids, cancellation);
-    }
+    internal void SetStatus(string value) { Status = value; RaiseChanged(); }
 
-    private async Task ConfigureAdditionalAsync(string[] ids, CancellationTokenSource cancellation)
-    {
-        AdditionalStatus = ids.Length == 0 ? "Kitten / Pocket / Kokoro / VOICEVOX: освобождение памяти…" : "Kitten / Pocket / Kokoro / VOICEVOX: предварительная загрузка выбранных голосов…";
-        Changed?.Invoke();
-        try
-        {
-            await worker.ConfigureAdditionalAsync(ids, cancellation.Token);
-            if (additionalCacheCancellation != cancellation) return;
-            AdditionalStatus = ids.Length == 0 ? "Kitten / Pocket / Kokoro / VOICEVOX: в памяти нет моделей." : "Kitten / Pocket / Kokoro / VOICEVOX готовы: выбранные модели в памяти.";
-        }
-        catch (OperationCanceledException) { }
-        catch (QuietException ex) { if (additionalCacheCancellation == cancellation) { AdditionalStatus = Messages.For(ex.Code); additionalSignature = null; } }
-        catch { if (additionalCacheCancellation == cancellation) { AdditionalStatus = "Не удалось предварительно загрузить Kitten / Pocket / Kokoro / VOICEVOX. Повторите выбор голоса."; additionalSignature = null; } }
-        finally
-        {
-            if (additionalCacheCancellation == cancellation) additionalCacheCancellation = null;
-            cancellation.Dispose(); Changed?.Invoke();
-        }
-    }
-    internal void SetStatus(string value) { Status = value; Changed?.Invoke(); }
     internal bool ChangeHotkey(ReadingCommand command, string chord)
     {
-        if (hotkeys is null || !hotkeys.Set(command, chord))
-        { SetStatus("Сочетание занято. Предыдущее назначение сохранено."); return false; }
-        Settings.Hotkeys[command] = chord; Save(); return true;
+        string normalized = chord.Length == 0 ? "" : Chord.Parse(chord)?.ToString() ?? chord;
+        if (hotkeys is null || !hotkeys.Set(command, normalized))
+        { SetStatus("Сочетание " + normalized + " занято или недоступно. Прежнее назначение сохранено."); return false; }
+        Settings.Hotkeys[command] = normalized; Save();
+        SetStatus(normalized.Length == 0 ? "Сочетание удалено." : "Назначено: " + normalized + ".");
+        return true;
     }
+
+    /// <summary>Start at sign-in uses the package's StartupTask, so it is available only when installed.</summary>
+    internal StartupState Startup { get; private set; } = StartupState.NotPackaged;
+
+    private async Task RefreshStartupAsync()
+    {
+        Startup = await StartupTaskClient.GetStateAsync();
+        RaiseChanged();
+    }
+
+    internal async Task SetStartAtLoginAsync(bool enabled)
+    {
+        Startup = await StartupTaskClient.SetAsync(enabled);
+        if (Startup == StartupState.DisabledByUser && enabled)
+            SetStatus("Автозапуск отключён в параметрах Windows. Включите QuietSelection в разделе «Автозагрузка».");
+        RaiseChanged();
+    }
+
+    internal void SuspendHotkeys() => hotkeys?.Suspend();
+    internal void ResumeHotkeys()
+    {
+        var lost = hotkeys?.Resume() ?? [];
+        if (lost.Count == 0) return;
+        foreach (var command in lost) Settings.Hotkeys[command] = "";
+        Save();
+        SetStatus("Другое приложение заняло сочетание. Назначьте его заново в разделе «Сочетания клавиш».");
+    }
+
     internal void Stop() => operations.Stop();
+
     internal void Exit() => _ = ExitAsync();
     private async Task ExitAsync()
     {
         if (exiting) return;
-        exiting = true; operations.Stop(); modelPreparation?.Cancel(); voiceDownload?.Cancel(); piperCacheCancellation?.Cancel(); sileroCacheCancellation?.Cancel(); additionalCacheCancellation?.Cancel();
+        exiting = true; operations.Stop(); modelPreparation?.Cancel(); voiceDownload?.Cancel();
+        foreach (var set in ResidentVoiceSets) set.Cancel();
         try
         {
-            foreach (var task in new[] { modelTask, voicePreparation, piperCacheTask, sileroCacheTask, additionalCacheTask })
+            foreach (var task in new[] { modelTask, voicePreparation }.Concat(ResidentVoiceSets.Select(x => x.Running)))
                 if (task is not null)
                     try { await task; }
                     catch { } // A failed background task must not prevent exit.
@@ -276,8 +270,8 @@ internal sealed class AppShell : IDisposable
     internal async Task DownloadModelsAsync()
     {
         if (PreparingModels) return;
-        if (MessageBox.Show(settingsWindow, "Подготовить локальные модели?\n\nУже проверенные модели будут сохранены. Новый прямой перевод японский → русский: 288,6 МБ с object.pouta.csc.fi (Helsinki-NLP / OPUS-MT, CC BY 4.0). Английский → русский и японский → английский: 312,9 МБ с argos-net.com (Argos, MIT/CC0 по заявлению издателя), если они ещё не установлены.\n\nПолный набор: до 601,5 МБ загрузки. Подготовка выполняется на этом компьютере. Закрытие настроек оставляет её в фоне; выход из приложения отменяет подготовку.",
-            "Загрузка локальных моделей", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+        if (!Confirm("Подготовить локальные модели перевода?\n\nУже проверенные модели будут сохранены. Прямой перевод японский → русский: 288,6 МБ с object.pouta.csc.fi (Helsinki-NLP / OPUS-MT, CC BY 4.0). Английский → русский и японский → английский: 312,9 МБ с argos-net.com (Argos, MIT/CC0 по заявлению издателя), если они ещё не установлены.\n\nПолный набор: до 601,5 МБ. Подготовка выполняется на этом компьютере. Закрытие настроек оставляет её в фоне; выход из приложения отменяет подготовку.",
+            "Загрузка моделей перевода")) return;
         await (modelTask = PrepareModelsAsync(true));
     }
 
@@ -285,66 +279,103 @@ internal sealed class AppShell : IDisposable
     {
         if (PreparingModels) return;
         using var cancellation = new CancellationTokenSource(); modelPreparation = cancellation;
-        ModelsReady = false; ModelStatus = download ? "Загрузка…" : "Проверка целостности…"; Changed?.Invoke();
+        ModelsReady = false; ModelStatus = download ? "Загрузка…" : "Проверка целостности…"; RaiseChanged();
         try
         {
-            var progress = new Progress<string>(value => { if (!cancellation.IsCancellationRequested && modelPreparation == cancellation) { ModelStatus = value; Changed?.Invoke(); } });
+            var progress = new Progress<string>(value => { if (!cancellation.IsCancellationRequested && modelPreparation == cancellation) { ModelStatus = value; RaiseChanged(); } });
             if (download) await ModelPreparation.PrepareAsync(null, progress, cancellation.Token);
             else
             {
                 await ModelPreparation.VerifyAsync(TranslationClient.DefaultModelRoot, cancellation.Token);
-                ModelStatus = "Проверка: локальный перевод тестовых фраз…"; Changed?.Invoke();
+                ModelStatus = "Проверка: локальный перевод тестовых фраз…"; RaiseChanged();
                 await new TranslationClient(TranslationClient.DefaultModelRoot).ProbeAsync(cancellation.Token);
             }
             cancellation.Token.ThrowIfCancellationRequested();
             ModelsReady = true; ModelStatus = "Готово — подтверждено локальным переводом.";
         }
         catch (OperationCanceledException) { ModelStatus = cancellation.IsCancellationRequested ? "Подготовка отменена. Можно повторить." : "Нет ответа от сервера. Повторите загрузку."; }
-        catch (QuietException ex) { ModelStatus = ex.Code == ErrorCode.ModelMissing ? "Нужна загрузка или восстановление моделей." : Messages.For(ex.Code); }
+        catch (QuietException ex) { ModelStatus = ex.Code == ErrorCode.ModelMissing ? "Модели не установлены." : Messages.For(ex.Code); }
         catch { ModelStatus = "Ошибка подготовки моделей. Можно повторить загрузку или проверку."; }
-        finally { modelPreparation = null; Changed?.Invoke(); }
+        finally { modelPreparation = null; RaiseChanged(); }
     }
 
-    internal async Task InstallVoiceAsync(string language)
+    /// <summary>Starts preparation of a catalog entry after the user confirms its terms.</summary>
+    internal Task InstallAsync(VoicePackageInfo package)
     {
-        if (preparingVoice) { SetStatus("Установка голоса уже выполняется."); return; }
-        var tag = language switch { "ru" => "ru-RU", "en" => "en-US", "ja" => "ja-JP", _ => throw new ArgumentException("UNSUPPORTED_VOICE_LANGUAGE") };
-        var label = AppSettings.SupportedLanguages[language];
-        if (MessageBox.Show(settingsWindow,
-            "Windows загрузит компоненты языка и синтеза речи: " + label + ".\n\nИсточник: Windows Update. Точный размер заранее не определён. Потребуется отдельное подтверждение прав администратора. Язык интерфейса Windows не изменится.\n\nЕсли закрыть это окно, запущенная установка продолжится. Начать установку?",
-            "Установка локального голоса", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
-        preparingVoice = true;
+        if (PreparingVoice) { SetStatus("Установка голоса уже выполняется."); return voicePreparation ?? Task.CompletedTask; }
+        Task task = package.Kind switch
+        {
+            VoicePackageKind.Piper => InstallPiperAsync(package),
+            VoicePackageKind.Silero => InstallSileroAsync(package),
+            VoicePackageKind.Additional => InstallAdditionalAsync(package),
+            VoicePackageKind.RhVoice => InstallRhVoiceAsync(package),
+            _ => InstallWindowsVoiceAsync(package)
+        };
+        // Windows installers run elevated and continue on their own; exit does not wait for them.
+        if (package.Kind is not (VoicePackageKind.Windows or VoicePackageKind.RhVoice)) voicePreparation = task;
+        return task;
+    }
+
+    private Task InstallPiperAsync(VoicePackageInfo package)
+    {
+        if (!Confirm($"Подготовить локальные голоса Piper?\n\nРусские: Denis, Dmitri, Irina (женский), Ruslan (мужской). Английский: LJSpeech.\n\nДо {TextFormat.Megabytes(PiperModels.DownloadBytes)} из каталога rhasspy/piper-voices на Hugging Face. Проверенные модели не загружаются повторно. Движок уже входит в приложение.\n\nДвижок — GPL-3.0. Корпуса Denis/Dmitri — CC0, LJSpeech — public domain. Корпус Ruslan — CC BY-NC-SA 4.0 (некоммерческое использование); лицензия корпуса Irina в карточке не указана. Базовый голос Lessac имеет отдельные условия.\n\nЗагрузку можно отменить. Готовность будет проверена настоящим синтезом.",
+            "Голоса Piper")) return Task.CompletedTask;
+        return PrepareVoicesAsync(package, piperModels, (progress, token) => PiperModels.PrepareAsync(null, progress, token), "Piper");
+    }
+
+    private Task InstallSileroAsync(VoicePackageInfo package)
+    {
+        var catalog = SileroModels.Catalog;
+        if (!Confirm($"Подготовить {TextFormat.Voices(catalog.Voices.Length)} Silero?\n\nОдна модель: {TextFormat.Megabytes(catalog.File.Bytes)} с официального сервера Silero. Движок уже входит в приложение.\n\nМодель — CC BY-NC-SA 4.0, бесплатное некоммерческое использование. Проверенные файлы используются повторно. Загрузку можно отменить.\n\nТекущий выбор голоса не изменится.",
+            "Русские голоса Silero")) return Task.CompletedTask;
+        return PrepareVoicesAsync(package, sileroModels, (progress, token) => SileroModels.PrepareAsync(null, progress, token, "ru"), "Silero");
+    }
+
+    private Task InstallAdditionalAsync(VoicePackageInfo package)
+    {
+        var engine = package.Engine!.Value;
+        string terms = engine switch
+        {
+            SpeechEngine.Kitten => "KittenTTS Mini 0.8: восемь английских голосов, общая модель. Модель — Apache 2.0.",
+            SpeechEngine.Pocket => "Pocket TTS: 21 английский голос. Модель — CC BY 4.0, код — MIT. Cosette и Jean предназначены только для некоммерческого использования; условия остальных голосов и указание авторства — в third-party/pocket.",
+            SpeechEngine.Kokoro => "Kokoro INT8: английские голоса, общая модель. Модель — Apache 2.0.",
+            _ => "VOICEVOX:四国めたん / VOICEVOX:玄野武宏 — только обычные варианты. Бесплатное использование по условиям VOICEVOX и персонажей. При распространении аудио указывайте соответствующий кредит. Полные условия находятся в third-party/voicevox внутри приложения."
+        };
+        if (!Confirm($"{terms}\n\nЗагрузка с {package.Source}: до {TextFormat.Megabytes(package.Bytes ?? 0)}. Файлы загружаются последовательно и проверяются. Текущий выбор голоса сохраняется.",
+            package.Title)) return Task.CompletedTask;
+        return PrepareVoicesAsync(package, additionalModels, (progress, token) => AdditionalModels.PrepareAsync(engine, null, progress, token), package.Title);
+    }
+
+    // Shared flow for model sets that replace files the resident worker may hold open.
+    private async Task PrepareVoicesAsync(VoicePackageInfo package, ResidentModels resident,
+        Func<IProgress<string>, CancellationToken, Task> prepare, string name)
+    {
+        using var cancellation = BeginVoiceTask(package, withCancellation: true)!;
         try
         {
-            SetStatus("Windows устанавливает голос: " + label + ". Ожидайте завершения.");
-            int code = await VoiceInstallation.InstallAsync(tag, stage => SetStatus("Установка: " + label + (stage == "Basic" ? " — компоненты языка…" : " — локальный голос…")));
-            if (code != 0 && code != 3010) { SetStatus("Windows не завершила установку голоса. Код: " + code + ". Можно воспользоваться штатными настройками."); return; }
+            await resident.ReleaseAsync(cancellation.Token);
+            await prepare(VoiceProgressReporter(cancellation), cancellation.Token);
             await RefreshVoicesAsync();
-            var voice = Voices.FirstOrDefault(x => x.Language == tag);
-            if (voice is null) { SetStatus("Установка завершилась, но речевой API ещё не видит голос. Возможно, требуется перезапуск Windows."); return; }
-            await worker.CallAsync(new("synthesize-test", Text: LanguagePlanner.TestPhrase(language), VoiceId: voice.Id), TimeSpan.FromSeconds(30), CancellationToken.None);
-            SetStatus("Голос доступен: " + label + ". Выберите его в разделе «Речь» и нажмите «Прослушать».");
+            SetStatus(name + ": голоса готовы. Выберите голос в разделе «Речь» и нажмите «Прослушать».");
         }
-        catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 1223) { SetStatus("Установка голоса отменена."); }
-        catch { SetStatus("Не удалось подготовить голос. Проверьте статус установки в настройках Windows."); }
-        finally { preparingVoice = false; }
+        catch (OperationCanceledException) { SetStatus(name + ": подготовка отменена; прежние голоса сохранены."); }
+        catch (QuietException ex) { SetStatus(Messages.For(ex.Code)); }
+        catch { SetStatus(name + ": не удалось подготовить голоса. Прежние модели сохранены; можно повторить."); }
+        finally { EndVoiceTask(); }
     }
 
-    internal async Task InstallRhVoiceAsync(RhVoicePackage package)
+    private async Task InstallRhVoiceAsync(VoicePackageInfo info)
     {
-        if (preparingVoice) { SetStatus("Установка голоса уже выполняется."); return; }
-        if (MessageBox.Show(settingsWindow,
-            $"Загрузить и установить RHVoice {package.Name}?\n\nРазмер: {package.Bytes / 1_000_000.0:F2} МБ. Источник: официальный репозиторий RHVoice на GitHub. Лицензия голоса: {package.License}. Движок входит в пакет.\n\nУстановщик не подписан; приложение проверяет закреплённые размер и SHA-256. Windows запросит права администратора для установки SAPI. После установки голос работает локально.\n\nЗагрузку можно отменить. После запуска системного установщика дождитесь завершения.",
-            "Бесплатный голос RHVoice", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
-        preparingVoice = true;
-        using var cancellation = new CancellationTokenSource(); voiceDownload = cancellation;
+        var package = info.RhVoice!;
+        if (!Confirm($"Загрузить и установить RHVoice {package.Name}?\n\nРазмер: {TextFormat.Megabytes(package.Bytes)}. Источник: официальный репозиторий RHVoice на GitHub. Лицензия голоса: {package.License}. Движок входит в пакет.\n\nУстановщик не подписан; приложение проверяет закреплённые размер и SHA-256. Windows запросит права администратора для установки SAPI. После установки голос работает локально.\n\nЗагрузку можно отменить. После запуска системного установщика дождитесь завершения.",
+            "Голос RHVoice")) return;
+        var cancellation = BeginVoiceTask(info, withCancellation: true)!;
         try
         {
-            var progress = new Progress<string>(value => { if (voiceDownload == cancellation && !cancellation.IsCancellationRequested) SetStatus(value); });
-            string directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "QuietSelection", "downloads", "rhvoice");
-            string path = await RhVoiceInstallation.DownloadAsync(package, directory, progress, cancellation.Token);
-            cancellation.Token.ThrowIfCancellationRequested(); voiceDownload = null;
-            SetStatus("Установка RHVoice " + package.Name + "… Подтвердите запрос Windows.");
+            string path = await RhVoiceInstallation.DownloadAsync(package, AppPaths.Downloads("rhvoice"), VoiceProgressReporter(cancellation), cancellation.Token);
+            cancellation.Token.ThrowIfCancellationRequested();
+            voiceDownload = null; VoiceProgressPercent = null;
+            SetVoiceProgress("Установка… Подтвердите запрос Windows.");
             int code = await RhVoiceInstallation.InstallAsync(path, package);
             if (code is not (0 or 3010)) { SetStatus("RHVoice: установка не завершена, код " + code + "."); return; }
             await RefreshVoicesAsync();
@@ -352,108 +383,64 @@ internal sealed class AppShell : IDisposable
                 && x.Name.Contains(package.Name, StringComparison.OrdinalIgnoreCase) && x.Language.Split('-')[0] == package.Language);
             if (voice is null) { SetStatus("RHVoice ещё не появился в SAPI. Обновите список или перезапустите Windows."); return; }
             await worker.CallAsync(new("synthesize-test", Text: LanguagePlanner.TestPhrase(package.Language), VoiceId: voice.Id), TimeSpan.FromSeconds(30), CancellationToken.None);
-            SetStatus("RHVoice " + package.Name + " установлен и прошёл проверку. Выберите его в списке и нажмите «Прослушать».");
+            SetStatus("RHVoice " + package.Name + " установлен и прошёл проверку.");
         }
         catch (OperationCanceledException) { SetStatus("Загрузка RHVoice отменена."); }
         catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 1223) { SetStatus("Установка RHVoice отменена."); }
-        catch { SetStatus("Не удалось загрузить или проверить RHVoice. Повторите установку; выбранные голоса сохранены."); }
-        finally { voiceDownload = null; preparingVoice = false; Changed?.Invoke(); }
+        catch { SetStatus("Не удалось загрузить или проверить RHVoice. Выбранные голоса сохранены."); }
+        finally { cancellation.Dispose(); EndVoiceTask(); }
     }
 
-    internal Task InstallPiperAsync()
+    private async Task InstallWindowsVoiceAsync(VoicePackageInfo info)
     {
-        if (preparingVoice) { SetStatus("Установка голоса уже выполняется."); return voicePreparation ?? Task.CompletedTask; }
-        return voicePreparation = InstallPiperCoreAsync();
-    }
-    private async Task InstallPiperCoreAsync()
-    {
-        if (preparingVoice) { SetStatus("Установка голоса уже выполняется."); return; }
-        if (MessageBox.Show(settingsWindow,
-            $"Подготовить локальные голоса Piper?\n\nРусский: Denis, Dmitri, Irina (женский), Ruslan (мужской). Английский: LJSpeech.\n\nПолный набор: до {PiperModels.DownloadBytes / 1_000_000.0:F2} МБ из каталога rhasspy/piper-voices на Hugging Face. Проверенные модели не загружаются повторно. Добавление Irina и Ruslan к прежнему набору: 126,41 МБ. Движок уже входит в приложение.\n\nДвижок — GPL-3.0. Корпуса Denis/Dmitri — CC0, LJSpeech — public domain. Корпус Ruslan — CC BY-NC-SA 4.0 (некоммерческое использование); лицензия корпуса Irina в карточке не указана. Базовый голос Lessac имеет отдельные условия. Модели доступны для бесплатной загрузки; набор предназначен для локального сравнения.\n\nЗагрузку можно отменить. Готовность будет проверена настоящим синтезом.",
-            "Компактные голоса Piper", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
-        preparingVoice = true;
-        using var cancellation = new CancellationTokenSource(); voiceDownload = cancellation;
+        string language = info.WindowsLanguage!;
+        var tag = language switch { "ru" => "ru-RU", "en" => "en-US", "ja" => "ja-JP", _ => throw new ArgumentException("UNSUPPORTED_VOICE_LANGUAGE") };
+        var label = AppSettings.SupportedLanguages[language];
+        if (!Confirm("Windows загрузит компоненты языка и синтеза речи: " + label + ".\n\nИсточник: Windows Update. Точный размер заранее не определён. Потребуется отдельное подтверждение прав администратора. Язык интерфейса Windows не изменится.\n\nЕсли закрыть это окно, запущенная установка продолжится. Начать установку?",
+            "Голос Windows")) return;
+        BeginVoiceTask(info, withCancellation: false);
         try
         {
-            var progress = new Progress<string>(value => { if (voiceDownload == cancellation && !cancellation.IsCancellationRequested) SetStatus(value); });
-            piperCacheCancellation?.Cancel();
-            if (piperCacheTask is not null) await piperCacheTask;
-            await worker.ConfigurePiperAsync([], cancellation.Token);
-            piperSignature = null;
-            await PiperModels.PrepareAsync(null, progress, cancellation.Token);
+            SetVoiceProgress("Ожидание Windows…");
+            int code = await VoiceInstallation.InstallAsync(tag, stage => SetVoiceProgress(stage == "Basic" ? "Компоненты языка…" : "Локальный голос…"));
+            if (code != 0 && code != 3010) { SetStatus("Windows не завершила установку голоса. Код: " + code + "."); return; }
             await RefreshVoicesAsync();
-            SetStatus("Piper готов. Выберите голос в списке и нажмите «Прослушать». Русские голоса: Denis, Dmitri, Irina, Ruslan; английский: LJSpeech.");
+            var voice = Voices.FirstOrDefault(x => x.Language == tag);
+            if (voice is null) { SetStatus("Установка завершилась, но голос ещё не виден. Возможно, требуется перезапуск Windows."); return; }
+            await worker.CallAsync(new("synthesize-test", Text: LanguagePlanner.TestPhrase(language), VoiceId: voice.Id), TimeSpan.FromSeconds(30), CancellationToken.None);
+            SetStatus("Голос доступен: " + label + ".");
         }
-        catch (OperationCanceledException) { SetStatus("Подготовка Piper отменена; прежние голоса сохранены."); }
-        catch (QuietException ex) { SetStatus(Messages.For(ex.Code)); }
-        catch { SetStatus("Не удалось подготовить Piper. Прежние голоса сохранены; можно повторить загрузку."); }
-        finally { voiceDownload = null; preparingVoice = false; UpdatePiperCache(); UpdateSileroCache(); UpdateAdditionalCache(); Changed?.Invoke(); }
+        catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 1223) { SetStatus("Установка голоса отменена."); }
+        catch { SetStatus("Не удалось подготовить голос. Проверьте статус установки в настройках Windows."); }
+        finally { EndVoiceTask(); }
     }
 
-    internal Task InstallSileroAsync(string language = "ru")
+    private CancellationTokenSource? BeginVoiceTask(VoicePackageInfo package, bool withCancellation)
     {
-        if (preparingVoice) { SetStatus("Установка голоса уже выполняется."); return voicePreparation ?? Task.CompletedTask; }
-        return voicePreparation = InstallSileroCoreAsync(language);
-    }
-    private async Task InstallSileroCoreAsync(string language)
-    {
-        var catalog = SileroModels.ForLanguage(language);
-        string title = language == "en" ? "Английские голоса Silero" : "Русские голоса Silero";
-        if (MessageBox.Show(settingsWindow,
-            $"Подготовить {catalog.Voices.Length} голосов Silero?\n\nОдна модель: {catalog.File.Bytes / 1_000_000.0:F2} МБ с официального сервера Silero. Движок уже входит в приложение.\n\nМодель — CC BY-NC-SA 4.0, бесплатное некоммерческое использование. Проверенные файлы используются повторно. Загрузку можно отменить.\n\nПосле установки выберите голос и нажмите «Прослушать». Текущий выбор не изменится.",
-            title, MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
-        preparingVoice = true;
-        using var cancellation = new CancellationTokenSource(); voiceDownload = cancellation;
-        try
-        {
-            var progress = new Progress<string>(value => { if (voiceDownload == cancellation && !cancellation.IsCancellationRequested) SetStatus(value); });
-            sileroCacheCancellation?.Cancel();
-            if (sileroCacheTask is not null) await sileroCacheTask;
-            await worker.ConfigureSileroAsync([], cancellation.Token);
-            sileroSignature = null;
-            await SileroModels.PrepareAsync(null, progress, cancellation.Token, language);
-            await RefreshVoicesAsync();
-            SetStatus("Silero готов. Выберите голос и нажмите «Прослушать».");
-        }
-        catch (OperationCanceledException) { SetStatus("Подготовка Silero отменена; прежние голоса сохранены."); }
-        catch (QuietException ex) { SetStatus(Messages.For(ex.Code)); }
-        catch { SetStatus("Не удалось подготовить Silero. Прежние голоса сохранены; можно повторить загрузку."); }
-        finally { voiceDownload = null; preparingVoice = false; UpdatePiperCache(); UpdateSileroCache(); UpdateAdditionalCache(); Changed?.Invoke(); }
+        ActiveVoicePackage = package.Key; VoiceProgress = "Подготовка…"; VoiceProgressPercent = null;
+        voiceDownload = withCancellation ? new CancellationTokenSource() : null;
+        RaiseChanged();
+        return voiceDownload;
     }
 
-    internal Task InstallAdditionalAsync(Speech.SpeechEngine engine)
+    private void EndVoiceTask()
     {
-        if (preparingVoice) return voicePreparation ?? Task.CompletedTask;
-        return voicePreparation = InstallAdditionalCoreAsync(engine);
+        voiceDownload = null; ActiveVoicePackage = null; VoiceProgress = ""; VoiceProgressPercent = null;
+        UpdateResidentVoices(); RaiseChanged();
     }
-    private async Task InstallAdditionalCoreAsync(Speech.SpeechEngine engine)
+
+    [GeneratedRegex(@"(\d{1,3})%")]
+    private static partial Regex PercentPattern();
+
+    private Progress<string> VoiceProgressReporter(CancellationTokenSource cancellation) => new(value =>
     {
-        var catalog = AdditionalModels.Catalog(engine);
-        string terms = engine == Speech.SpeechEngine.Kitten
-            ? "KittenTTS Mini 0.8: восемь английских голосов, общая модель. Модель — Apache 2.0."
-            : engine == Speech.SpeechEngine.Pocket
-            ? "Pocket TTS: 21 английский голос. Модель — CC BY 4.0, код — MIT. Cosette и Jean предназначены только для некоммерческого использования; условия остальных голосов и указание авторства — в third-party/pocket."
-            : engine == Speech.SpeechEngine.Kokoro
-            ? "Kokoro INT8: английские голоса, общая модель. Модель — Apache 2.0."
-            : "VOICEVOX:四国めたん / VOICEVOX:玄野武宏 — только обычные варианты. Бесплатное использование по условиям VOICEVOX и персонажей. При распространении аудио указывайте соответствующий кредит. Полные условия находятся в third-party/voicevox внутри приложения.";
-        string source = engine is Speech.SpeechEngine.Kitten or Speech.SpeechEngine.Pocket ? "Hugging Face" : "GitHub";
-        if (MessageBox.Show(settingsWindow, $"{terms}\n\nЗагрузка с {source}: до {catalog.Files.Sum(f => f.Bytes) / 1_000_000.0:F2} МБ. Файлы загружаются последовательно и проверяются. Текущий выбор голоса сохраняется.",
-            "Установка локальных голосов", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
-        using var cancellation = new CancellationTokenSource(); voiceDownload = cancellation; preparingVoice = true; Changed?.Invoke();
-        try
-        {
-            additionalCacheCancellation?.Cancel();
-            if (additionalCacheTask is not null) await additionalCacheTask;
-            await worker.ConfigureAdditionalAsync([], cancellation.Token); additionalSignature = null;
-            var progress = new Progress<string>(SetStatus);
-            await AdditionalModels.PrepareAsync(engine, null, progress, cancellation.Token);
-            await RefreshVoicesAsync(); SetStatus("Голоса готовы. Выберите голос и нажмите «Прослушать».");
-        }
-        catch (OperationCanceledException) { SetStatus("Подготовка отменена; прежние голоса сохранены."); }
-        catch (QuietException ex) { SetStatus(Messages.For(ex.Code)); }
-        catch { SetStatus("Не удалось подготовить голоса. Прежние модели сохранены; можно повторить загрузку."); }
-        finally { voiceDownload = null; preparingVoice = false; UpdateAdditionalCache(); Changed?.Invoke(); }
-    }
+        if (voiceDownload != cancellation || cancellation.IsCancellationRequested) return;
+        var match = PercentPattern().Match(value);
+        VoiceProgressPercent = match.Success ? Math.Min(100, int.Parse(match.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture)) : null;
+        SetVoiceProgress(value);
+    });
+
+    private void SetVoiceProgress(string value) { VoiceProgress = value; RaiseChanged(); }
 
     internal Task PreviewAsync(LanguageSettings language)
     {
@@ -475,9 +462,7 @@ internal sealed class AppShell : IDisposable
             string text;
             if (command == ReadingCommand.Region)
             {
-                uint packageLength = 0;
-                if (NativeMethods.GetCurrentPackageFullName(ref packageLength, 0) == 15700)
-                    throw new QuietException(ErrorCode.PackageIdentityRequired);
+                if (!NativeMethods.IsPackaged) throw new QuietException(ErrorCode.PackageIdentityRequired);
                 operation.Transition(OperationState.SelectingRegion);
                 var region = await RegionPicker.SelectAsync(source, operation.Token);
                 region.Validate(4096);
@@ -517,7 +502,10 @@ internal sealed class AppShell : IDisposable
 
     public void Dispose()
     {
-        operations.Stop(); modelPreparation?.Cancel(); voiceDownload?.Cancel(); piperCacheCancellation?.Cancel(); sileroCacheCancellation?.Cancel(); additionalCacheCancellation?.Cancel(); worker.Dispose(); tray?.Dispose(); hotkeys?.Dispose(); openSettings?.Dispose();
-        if (ownsMutex) mutex.ReleaseMutex(); mutex.Dispose();
+        operations.Stop(); modelPreparation?.Cancel(); voiceDownload?.Cancel();
+        foreach (var set in ResidentVoiceSets) set.Cancel();
+        worker.Dispose(); tray?.Dispose(); indicator?.Close(); hotkeys?.Dispose(); openSettings?.Dispose();
+        if (ownsMutex) mutex.ReleaseMutex();
+        mutex.Dispose();
     }
 }
