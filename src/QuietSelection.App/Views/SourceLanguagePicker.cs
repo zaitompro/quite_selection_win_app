@@ -9,7 +9,9 @@ internal static class SourceLanguagePicker
     internal static async Task<string> ChooseAsync(IEnumerable<string> candidates, CancellationToken token)
     {
         var window = new Window { Title = "Исходный язык", Width = 460, SizeToContent = SizeToContent.Height,
-            WindowStartupLocation = WindowStartupLocation.CenterScreen, FontSize = 18, ResizeMode = ResizeMode.NoResize };
+            WindowStartupLocation = WindowStartupLocation.CenterScreen, FontSize = Ui.Body, ResizeMode = ResizeMode.NoResize,
+            // Opened from a hotkey while another app is in front: stay visible above it.
+            Topmost = true, Icon = AppIcon.Window };
         SystemTheme.ApplyWindow(window);
         var panel = new StackPanel { Margin = new(24) };
         panel.Children.Add(new TextBlock { Text = "Выберите язык фрагментов, которые не удалось определить. Выбор действует только для текущего чтения.", TextWrapping = TextWrapping.Wrap });
@@ -26,8 +28,13 @@ internal static class SourceLanguagePicker
         window.PreviewKeyDown += (_, e) => { if (e.Key == System.Windows.Input.Key.Escape) { e.Handled = true; window.Close(); } };
         window.Closed += (_, _) => done.TrySetCanceled(); window.Content = panel;
         using var registration = token.Register(() => window.Dispatcher.BeginInvoke(() => window.Close()));
-        token.ThrowIfCancellationRequested(); window.Show();
-        string result = await done.Task;
+        // An unanswered choice must not leave the reading operation waiting forever.
+        var timeout = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMinutes(2) };
+        timeout.Tick += (_, _) => { timeout.Stop(); window.Close(); };
+        token.ThrowIfCancellationRequested(); window.Show(); window.Activate(); timeout.Start();
+        string result;
+        try { result = await done.Task; }
+        finally { timeout.Stop(); }
         token.ThrowIfCancellationRequested();
         return result;
     }

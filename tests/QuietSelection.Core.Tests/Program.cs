@@ -179,10 +179,28 @@ Test("language.decimals_and_versions_stay_in_sentence", () =>
     Check(plan.Select(x => x.Language).SequenceEqual(new[] { "ru", "ru", "en" }));
 });
 Test("translation.independent_of_speech_auto_detect", () => { var settings = Config(); settings.AutoDetect = false; Check(TranslationPlanner.Plan("Hello world", settings).Single().Source == "en"); });
-Test("translation.uncertain_requires_choice", () => Error(ErrorCode.SourceLanguageRequired, () => TranslationPlanner.Plan("OK", Config())));
+Test("translation.uncertain_requires_choice", () =>
+{
+    // No clue at all: Han without kana could be Chinese; an unsupported script has no language.
+    Error(ErrorCode.SourceLanguageRequired, () => TranslationPlanner.Plan("公演", Config()));
+    Error(ErrorCode.SourceLanguageRequired, () => TranslationPlanner.Plan("مرحبا", Config()));
+});
+Test("translation.context_resolves_ambiguous_sentences", () =>
+{
+    // Short Latin follows its neighbours; a lone short word is English (the only Latin language).
+    Check(TranslationPlanner.Plan("Hello world. OK. See you later.", Config()).All(x => x.Source == "en"));
+    Check(TranslationPlanner.Plan("OK", Config()).Single().Source == "en");
+    // A Russian sentence with an English name stays Russian; an English one with a Russian word stays English.
+    Check(TranslationPlanner.Plan("Установите Python и запустите скрипт.", Config()).Single().Source == "ru");
+    Check(TranslationPlanner.Plan("Open the Настройки window and press Start.", Config()).Single().Source == "en");
+    Check(TranslationPlanner.Plan("This café is open today.", Config()).Single().Source == "en");
+    // Han-only sentences are Japanese when the selection also has kana.
+    Check(TranslationPlanner.Plan("これはテストです。公演。", Config()).All(x => x.Source == "ja"));
+});
 Test("translation.temporary_choice_preserves_known_spans", () =>
 {
-    const string text = "Начало. OK. Hello world.\n123";
+    // The user's choice applies only to spans that context cannot resolve.
+    const string text = "Начало. 公演。 Hello world.\n123";
     var plan = TranslationPlanner.Plan(text, Config(), "ja");
     Check(string.Concat(plan.Select(x => x.Text)) == text && plan.Select(x => x.Source).SequenceEqual(new[] { "ru", "ja", "en", "ru" }));
 });

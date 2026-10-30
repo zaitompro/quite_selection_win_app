@@ -482,6 +482,8 @@ internal sealed partial class AppShell : IDisposable
                 try { plan = TranslationPlanner.Plan(text, snapshot); }
                 catch (QuietException ex) when (ex.Code == ErrorCode.SourceLanguageRequired)
                 {
+                    SetStatus("Выберите язык текста в окне «Исходный язык».");
+                    if (Settings.ShowReadingIndicator) indicator?.ShowState("Выберите язык текста");
                     string chosen = await SourceLanguagePicker.ChooseAsync(snapshot.ActiveLanguages.Select(x => x.Language), operation.Token);
                     plan = TranslationPlanner.Plan(text, snapshot, chosen);
                 }
