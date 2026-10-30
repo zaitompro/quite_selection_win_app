@@ -46,7 +46,7 @@ try {
     $start = [System.Diagnostics.ProcessStartInfo]::new((Join-Path $staging 'QuietSelection.exe'))
     $start.UseShellExecute = $false
     $start.CreateNoWindow = $true
-    $start.ArgumentList.Add('--runtime-check')
+    $start.Arguments = '--runtime-check' # ArgumentList is missing in Windows PowerShell 5.1.
     # Prove that the package is independent of both the local SDK and registered runtimes.
     [void]$start.Environment.Remove('DOTNET_ROOT')
     [void]$start.Environment.Remove('DOTNET_ROOT_X64')
