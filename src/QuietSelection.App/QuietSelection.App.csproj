@@ -8,6 +8,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <PlatformTarget>x64</PlatformTarget>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>../../assets/icons/QuietSelection.ico</ApplicationIcon>
     <AssemblyName>QuietSelection</AssemblyName>
     <StartupObject>QuietSelection.App.Program</StartupObject>
     <AppHostDotNetSearch>AppRelative;EnvironmentVariable</AppHostDotNetSearch>

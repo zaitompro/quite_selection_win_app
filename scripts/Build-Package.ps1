@@ -31,20 +31,11 @@ try {
     foreach ($name in @('LICENSE.txt','ThirdPartyNotices.txt')) {
         if (Test-Path -LiteralPath (Join-Path $sdk $name)) { Copy-Item -LiteralPath (Join-Path $sdk $name) -Destination $runtime }
     }
-    Add-Type -AssemblyName System.Drawing
+    # Logos are generated from the app mark: QuietSelection.exe --export-icons assets/icons
     $assetDirectory = Join-Path $staging 'Assets'
     New-Item -ItemType Directory -Path $assetDirectory -Force | Out-Null
-    foreach ($asset in @(@('StoreLogo.png',50),@('Square44x44Logo.png',44),@('Square150x150Logo.png',150))) {
-        $size = [int]$asset[1]
-        $bitmap = [System.Drawing.Bitmap]::new($size,$size)
-        $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
-        $pen = [System.Drawing.Pen]::new([System.Drawing.Color]::White,[single]($size / 20))
-        try {
-            $graphics.Clear([System.Drawing.Color]::FromArgb(27,75,126))
-            $graphics.DrawRectangle($pen,[single]($size*0.2),[single]($size*0.2),[single]($size*0.6),[single]($size*0.6))
-            foreach ($y in @(0.38,0.52,0.66)) { $graphics.DrawLine($pen,[single]($size*0.32),[single]($size*$y),[single]($size*0.68),[single]($size*$y)) }
-            $bitmap.Save((Join-Path $assetDirectory $asset[0]),[System.Drawing.Imaging.ImageFormat]::Png)
-        } finally { $pen.Dispose(); $graphics.Dispose(); $bitmap.Dispose() }
+    foreach ($asset in @('StoreLogo.png','Square44x44Logo.png','Square150x150Logo.png')) {
+        Copy-Item -LiteralPath (Join-Path $projectRoot "assets/icons/$asset") -Destination $assetDirectory
     }
     $makeappx = 'C:/Program Files (x86)/Windows Kits/10/bin/10.0.26100.0/x64/makeappx.exe'
     [xml]$manifest = Get-Content -LiteralPath (Join-Path $projectRoot 'packaging/AppxManifest.xml') -Raw

@@ -5,7 +5,6 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Input;
-using System.Windows.Markup;
 using System.Windows.Media;
 using System.Windows.Threading;
 using QuietSelection.App.Platform;
@@ -379,11 +378,7 @@ internal sealed partial class SettingsWindow : Window
         view.GroupDescriptions.Add(new PropertyGroupDescription(nameof(VoiceChoice.Group)));
         // Not synchronized with the view: an unset voice must stay visibly unset.
         var voice = new ComboBox { ItemsSource = view, SelectedValuePath = "Id", MinHeight = 32, HorizontalAlignment = HorizontalAlignment.Stretch, IsSynchronizedWithCurrentItem = false, SelectedIndex = -1 };
-        voice.GroupStyle.Add(new GroupStyle { HeaderTemplate = (DataTemplate)XamlReader.Parse("""
-            <DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
-              <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12" Margin="10,10,10,4" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-            </DataTemplate>
-            """) });
+        voice.GroupStyle.Add(new GroupStyle { HeaderTemplate = Ui.GroupHeader() });
         if (choices.Any(x => x.Id == settings.VoiceId)) voice.SelectedValue = settings.VoiceId;
         AutomationProperties.SetName(voice, "Голос: " + languageName);
         var voiceLabel = Ui.Secondary("Голос"); voiceLabel.Margin = new(0, 0, 0, 4);

@@ -1,7 +1,6 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
-using System.Windows.Markup;
 using System.Windows.Media;
 
 namespace QuietSelection.App.Views;
@@ -142,35 +141,55 @@ internal static class Ui
     }
 
     /// <summary>Navigation entries: an accent pill marks the selected page, hover uses a subtle fill.</summary>
-    internal static Style NavigationItemStyle() => (Style)XamlReader.Parse("""
-        <Style xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" TargetType="ListBoxItem">
-          <Setter Property="Margin" Value="0,1,0,1"/>
-          <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
-          <Setter Property="Template">
-            <Setter.Value>
-              <ControlTemplate TargetType="ListBoxItem">
-                <Grid>
-                  <Border x:Name="Back" CornerRadius="4" Background="Transparent"/>
-                  <Border x:Name="Pill" Width="3" Height="16" CornerRadius="1.5" HorizontalAlignment="Left" Visibility="Collapsed"
-                          Background="{DynamicResource AccentFillColorDefaultBrush}"/>
-                  <Border x:Name="Focus" CornerRadius="4" BorderThickness="2" BorderBrush="Transparent"/>
-                  <ContentPresenter Margin="12,9,12,9"/>
-                </Grid>
-                <ControlTemplate.Triggers>
-                  <Trigger Property="IsMouseOver" Value="True">
-                    <Setter TargetName="Back" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
-                  </Trigger>
-                  <Trigger Property="IsSelected" Value="True">
-                    <Setter TargetName="Back" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
-                    <Setter TargetName="Pill" Property="Visibility" Value="Visible"/>
-                  </Trigger>
-                  <Trigger Property="IsKeyboardFocused" Value="True">
-                    <Setter TargetName="Focus" Property="BorderBrush" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
-                  </Trigger>
-                </ControlTemplate.Triggers>
-              </ControlTemplate>
-            </Setter.Value>
-          </Setter>
-        </Style>
-        """);
+    internal static Style NavigationItemStyle()
+    {
+        var back = new FrameworkElementFactory(typeof(Border), "Back");
+        back.SetValue(Border.CornerRadiusProperty, new CornerRadius(4));
+        back.SetValue(Border.BackgroundProperty, Brushes.Transparent);
+        var pill = new FrameworkElementFactory(typeof(Border), "Pill");
+        pill.SetValue(FrameworkElement.WidthProperty, 3.0);
+        pill.SetValue(FrameworkElement.HeightProperty, 16.0);
+        pill.SetValue(Border.CornerRadiusProperty, new CornerRadius(1.5));
+        pill.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Left);
+        pill.SetValue(UIElement.VisibilityProperty, Visibility.Collapsed);
+        pill.SetResourceReference(Border.BackgroundProperty, "AccentFillColorDefaultBrush");
+        var focus = new FrameworkElementFactory(typeof(Border), "Focus");
+        focus.SetValue(Border.CornerRadiusProperty, new CornerRadius(4));
+        focus.SetValue(Border.BorderThicknessProperty, new Thickness(2));
+        focus.SetValue(Border.BorderBrushProperty, Brushes.Transparent);
+        var content = new FrameworkElementFactory(typeof(ContentPresenter));
+        content.SetValue(FrameworkElement.MarginProperty, new Thickness(12, 9, 12, 9));
+        var root = new FrameworkElementFactory(typeof(Grid));
+        root.AppendChild(back); root.AppendChild(pill); root.AppendChild(focus); root.AppendChild(content);
+        var template = new ControlTemplate(typeof(ListBoxItem)) { VisualTree = root };
+        var subtle = new DynamicResourceExtension("SubtleFillColorSecondaryBrush");
+        template.Triggers.Add(new Trigger { Property = UIElement.IsMouseOverProperty, Value = true, Setters = { new Setter(Border.BackgroundProperty, subtle, "Back") } });
+        template.Triggers.Add(new Trigger
+        {
+            Property = ListBoxItem.IsSelectedProperty, Value = true,
+            Setters = { new Setter(Border.BackgroundProperty, subtle, "Back"), new Setter(UIElement.VisibilityProperty, Visibility.Visible, "Pill") }
+        });
+        template.Triggers.Add(new Trigger
+        {
+            Property = UIElement.IsKeyboardFocusedProperty, Value = true,
+            Setters = { new Setter(Border.BorderBrushProperty, new DynamicResourceExtension("TextFillColorPrimaryBrush"), "Focus") }
+        });
+        var style = new Style(typeof(ListBoxItem));
+        style.Setters.Add(new Setter(FrameworkElement.MarginProperty, new Thickness(0, 1, 0, 1)));
+        style.Setters.Add(new Setter(FrameworkElement.FocusVisualStyleProperty, null));
+        style.Setters.Add(new Setter(Control.TemplateProperty, template));
+        return style;
+    }
+
+    /// <summary>Group header in voice pickers (engine name).</summary>
+    internal static DataTemplate GroupHeader()
+    {
+        var text = new FrameworkElementFactory(typeof(TextBlock));
+        text.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding("Name"));
+        text.SetValue(TextBlock.FontWeightProperty, FontWeights.SemiBold);
+        text.SetValue(TextBlock.FontSizeProperty, Caption);
+        text.SetValue(FrameworkElement.MarginProperty, new Thickness(10, 10, 10, 4));
+        text.SetResourceReference(TextBlock.ForegroundProperty, "TextFillColorSecondaryBrush");
+        return new DataTemplate { VisualTree = text };
+    }
 }

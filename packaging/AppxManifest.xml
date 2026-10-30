@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+ xmlns:uap5="http://schemas.microsoft.com/appx/manifest/uap/windows10/5"
  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
- IgnorableNamespaces="uap rescap">
+ IgnorableNamespaces="uap uap5 rescap">
   <Identity Name="QuietSelection.Windows" Publisher="CN=QuietSelection.Local" Version="0.1.0.21" ProcessorArchitecture="x64" />
   <Properties><DisplayName>QuietSelection</DisplayName><PublisherDisplayName>QuietSelection</PublisherDisplayName><Logo>Assets\StoreLogo.png</Logo></Properties>
   <Resources><Resource Language="ru-ru" /><Resource Language="en-us" /><Resource Language="ja-jp" /></Resources>
@@ -10,6 +11,12 @@
   <Applications>
     <Application Id="App" Executable="QuietSelection.exe" EntryPoint="Windows.FullTrustApplication">
       <uap:VisualElements DisplayName="QuietSelection" Description="Локальное чтение выделенного текста" BackgroundColor="#1B4B7E" Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png" />
+      <Extensions>
+        <!-- Off by default; the user turns it on in Settings → General (Windows confirms once). -->
+        <uap5:Extension Category="windows.startupTask" Executable="QuietSelection.exe" EntryPoint="Windows.FullTrustApplication">
+          <uap5:StartupTask TaskId="QuietSelectionStartup" Enabled="false" DisplayName="QuietSelection" />
+        </uap5:Extension>
+      </Extensions>
     </Application>
   </Applications>
   <Capabilities><rescap:Capability Name="runFullTrust" /></Capabilities>

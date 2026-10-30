@@ -11,6 +11,7 @@
 #include <winrt/Windows.Storage.Streams.h>
 #include <winrt/Windows.Management.Deployment.h>
 #include <winrt/Windows.ApplicationModel.h>
+#include <winrt/Windows.ApplicationModel.Activation.h>
 #include <string>
 #include <cstring>
 #include "SapiSpeech.h"
@@ -129,6 +130,32 @@ extern "C" __declspec(dllexport) HRESULT __cdecl qs_recognize(
 }
 
 extern "C" __declspec(dllexport) void __cdecl qs_free(void* memory) noexcept { CoTaskMemFree(memory); }
+
+// Package StartupTask "QuietSelectionStartup". enable: -1 read, 0 disable, 1 request enabling
+// (Windows asks the user once). state receives the WinRT StartupTaskState value.
+extern "C" __declspec(dllexport) HRESULT __cdecl qs_startup_task(int enable, int* state) noexcept {
+    *state = 0;
+    try {
+        Apartment apartment;
+        using Windows::ApplicationModel::StartupTaskState;
+        auto task = Windows::ApplicationModel::StartupTask::GetAsync(L"QuietSelectionStartup").get();
+        if (enable == 1 && task.State() == StartupTaskState::Disabled) task.RequestEnableAsync().get();
+        else if (enable == 0 && task.State() == StartupTaskState::Enabled) task.Disable();
+        *state = static_cast<int>(task.State());
+        return S_OK;
+    } catch (...) { return to_hresult(); }
+}
+
+// value = 1 when Windows launched the package at sign-in through its StartupTask.
+extern "C" __declspec(dllexport) HRESULT __cdecl qs_activated_by_startup_task(int* value) noexcept {
+    *value = 0;
+    try {
+        Apartment apartment;
+        auto args = Windows::ApplicationModel::AppInstance::GetActivatedEventArgs();
+        if (args && args.Kind() == Windows::ApplicationModel::Activation::ActivationKind::StartupTask) *value = 1;
+        return S_OK;
+    } catch (...) { return to_hresult(); }
+}
 
 extern "C" __declspec(dllexport) HRESULT __cdecl qs_install_package(wchar_t const* uri) noexcept {
     try {

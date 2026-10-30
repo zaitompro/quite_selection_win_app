@@ -13,10 +13,14 @@ internal static class Program
         if (args.Length == 2 && args[0] == "--selection-worker") return WorkerHost.RunSelection(args[1]);
         if (args.Length == 2 && args[0] == "--native-speech-worker") return WorkerHost.RunNativeSpeech(args[1]);
         int exitCode = 0;
+        // WinRT activation info must be read on this MTA thread, not the WPF STA thread.
+        bool launchedAtSignIn = args.Length == 0 && Platform.StartupTaskClient.LaunchedAtSignIn();
         var thread = new Thread(() =>
         {
             try
             {
+                // Development helper: regenerates assets/icons from the drawn app mark.
+                if (args.Length == 2 && args[0] == "--export-icons") { Views.AppIcon.Export(args[1]); return; }
                 var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
                 Views.SystemTheme.FollowWindows(app);
                 if (args.Contains("--mixed-speech-tests"))
@@ -38,7 +42,7 @@ internal static class Program
                 else
                 {
                     var shell = new AppShell(app);
-                    bool inTray = args.Contains("--tray") || Platform.StartupTaskClient.LaunchedAtSignIn();
+                    bool inTray = args.Contains("--tray") || launchedAtSignIn;
                     app.Startup += async (_, _) => await shell.StartAsync(inTray);
                     app.Exit += (_, _) => shell.Dispose();
                     app.SessionEnding += (_, _) => app.Shutdown();

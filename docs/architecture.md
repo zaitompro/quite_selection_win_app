@@ -102,3 +102,38 @@ is killed after the existing 750 ms grace period. A cancelled stream is drained
 before reusing its protocol. Native workers are terminated at cancellation.
 The application holds the worker configuration gate through the whole plan.
 Changing selected voices cannot mutate an active reading operation.
+
+## Native speech, playback and interface (after 0.1.0.21)
+
+WinRT and SAPI synthesis run in one resident `--native-speech-worker` helper
+(`NativeSpeechClient`) instead of a new process per request. Requests are up to
+240 characters; a WAV response is bounded to 6 MB. Cancellation, timeout or an IPC
+failure kill the helper (native synthesis cannot be interrupted); the next request
+starts a new one. It is released after two idle minutes.
+
+`WorkerClient` uses separate slots: speech engines and their preloading share one,
+selection reads have their own, and one-shot helpers (OCR, voice lists) use none.
+A hotkey no longer waits for a model preload before reading the selection.
+
+`PcmPlayer` copies each PCM chunk into a native buffer, keeps two buffers queued on
+the waveOut device and waits on its completion event. Playback continues without
+gaps between chunks; callers call `DrainAsync` before disposing. Buffers are zeroed
+before release.
+
+Translation models are hashed in full once per process (startup check or first
+translation); later translations compare size and write time and hash again only
+after a change.
+
+`AppShell` keeps application state; windows only display it. `ResidentModels`
+handles preloading for Piper, Silero and the additional engines, `SpeechEngines`
+maps voice IDs to engines, and `AppPaths` holds the data locations.
+
+The settings window follows the Windows 11 Settings layout (Fluent resources, cards,
+14/20/28 type ramp). The voice catalog shows size, voice count, license and state,
+with installation progress in the row. Shortcuts accept any Ctrl/Alt combination
+(`Chord`); global hotkeys are suspended while a new one is recorded. The tray icon
+shows a reading state; an optional non-activating indicator offers Stop and is hidden
+while a region is selected or captured, so it never enters the OCR image. Start at
+sign-in uses the package `StartupTask` (`QuietSelectionStartup`, off by default).
+Icons are drawn by `AppIcon`; `QuietSelection.exe --export-icons assets/icons`
+regenerates the MSIX logos and the executable icon.

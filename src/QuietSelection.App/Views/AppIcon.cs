@@ -60,5 +60,30 @@ internal static class AppIcon
         finally { DestroyIcon(handle); }
     }
 
+    /// <summary>Writes the MSIX logos and a multi-size .ico (PNG entries) for the executable.</summary>
+    internal static void Export(string directory)
+    {
+        Directory.CreateDirectory(directory);
+        static byte[] Png(int size)
+        {
+            var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(Render(size)));
+            using var stream = new MemoryStream(); encoder.Save(stream); return stream.ToArray();
+        }
+        foreach (var (name, size) in new[] { ("StoreLogo.png", 50), ("Square44x44Logo.png", 44), ("Square150x150Logo.png", 150) })
+            File.WriteAllBytes(Path.Combine(directory, name), Png(size));
+        int[] sizes = [16, 20, 24, 32, 40, 48, 64, 256];
+        var images = sizes.Select(Png).ToArray();
+        using var ico = new BinaryWriter(File.Create(Path.Combine(directory, "QuietSelection.ico")));
+        ico.Write((ushort)0); ico.Write((ushort)1); ico.Write((ushort)sizes.Length); // ICONDIR
+        int offset = 6 + 16 * sizes.Length;
+        for (int i = 0; i < sizes.Length; i++)
+        {
+            ico.Write((byte)(sizes[i] >= 256 ? 0 : sizes[i])); ico.Write((byte)(sizes[i] >= 256 ? 0 : sizes[i]));
+            ico.Write((byte)0); ico.Write((byte)0); ico.Write((ushort)1); ico.Write((ushort)32);
+            ico.Write(images[i].Length); ico.Write(offset); offset += images[i].Length;
+        }
+        foreach (var image in images) ico.Write(image);
+    }
+
     [DllImport("user32.dll")] private static extern bool DestroyIcon(nint handle);
 }

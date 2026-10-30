@@ -16,7 +16,11 @@ internal sealed class RegionPicker : Window
     private readonly nint sourceWindow;
     private readonly System.Drawing.Rectangle bounds;
     private readonly Canvas canvas = new() { Focusable = false };
-    private readonly Rectangle rectangle = new() { Stroke = Brushes.Yellow, StrokeThickness = 3, Fill = Brushes.Transparent, Focusable = false };
+    // Everything outside the selection is dimmed; the selection keeps the screen's own brightness.
+    private readonly System.Windows.Shapes.Path shade = new() { Fill = new SolidColorBrush(Color.FromArgb(120, 0, 0, 0)), IsHitTestVisible = false };
+    private readonly Rectangle rectangle = new() { Stroke = Brushes.White, StrokeThickness = 2, Fill = Brushes.Transparent, Focusable = false, IsHitTestVisible = false, Visibility = Visibility.Collapsed };
+    private readonly TextBlock size = new() { Foreground = Brushes.White, FontSize = 13, Padding = new(8, 3, 8, 4), IsHitTestVisible = false, Visibility = Visibility.Collapsed,
+        Background = new SolidColorBrush(Color.FromArgb(200, 0, 0, 0)) };
     private readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromMilliseconds(25) };
     private NativePoint? start;
     private CancellationTokenRegistration cancellationRegistration;
@@ -27,13 +31,20 @@ internal sealed class RegionPicker : Window
         GetCursorPos(out var cursor);
         bounds = System.Windows.Forms.Screen.FromPoint(new(cursor.X, cursor.Y)).Bounds;
         WindowStyle = WindowStyle.None; ResizeMode = ResizeMode.NoResize;
-        AllowsTransparency = true; Background = new SolidColorBrush(Color.FromArgb(30, 0, 0, 0));
+        // Nearly transparent but hit-testable, so mouse input reaches the overlay.
+        AllowsTransparency = true; Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0)); Cursor = Cursors.Cross;
         ShowInTaskbar = false; ShowActivated = false; Topmost = true; Focusable = false;
         Content = canvas;
-        canvas.Children.Add(rectangle);
-        var hint = new TextBlock { Text = "Обведите область на этом мониторе. Esc или правая кнопка — отмена.",
-            FontSize = 22, Background = Brushes.Black, Foreground = Brushes.White, Padding = new(12), IsHitTestVisible = false };
-        canvas.Children.Add(hint); Canvas.SetLeft(hint, 20); Canvas.SetTop(hint, 20);
+        canvas.Children.Add(shade); canvas.Children.Add(rectangle); canvas.Children.Add(size);
+        var hint = new Border
+        {
+            Child = new TextBlock { Text = "Обведите область с текстом. Esc или правая кнопка мыши — отмена.", FontSize = 16, Foreground = Brushes.White },
+            Background = new SolidColorBrush(Color.FromArgb(220, 32, 32, 32)), CornerRadius = new(8), Padding = new(16, 10, 16, 10), IsHitTestVisible = false
+        };
+        canvas.Children.Add(hint);
+        // Centered at the top of the monitor once its size is known.
+        canvas.SizeChanged += (_, _) => { Canvas.SetLeft(hint, Math.Max(16, (canvas.ActualWidth - hint.ActualWidth) / 2)); Canvas.SetTop(hint, 24); Shade(null); };
+        hint.SizeChanged += (_, _) => Canvas.SetLeft(hint, Math.Max(16, (canvas.ActualWidth - hint.ActualWidth) / 2));
         SourceInitialized += (_, _) =>
         {
             var handle = new WindowInteropHelper(this).Handle;
@@ -84,8 +95,19 @@ internal sealed class RegionPicker : Window
         GetCursorPos(out var last);
         var a = PointFromScreen(new(first.X, first.Y));
         var b = PointFromScreen(new(Math.Clamp(last.X, bounds.Left, bounds.Right), Math.Clamp(last.Y, bounds.Top, bounds.Bottom)));
-        Canvas.SetLeft(rectangle, Math.Min(a.X, b.X)); Canvas.SetTop(rectangle, Math.Min(a.Y, b.Y));
-        rectangle.Width = Math.Abs(a.X - b.X); rectangle.Height = Math.Abs(a.Y - b.Y);
+        var selection = new Rect(a, b);
+        Canvas.SetLeft(rectangle, selection.X); Canvas.SetTop(rectangle, selection.Y);
+        rectangle.Width = selection.Width; rectangle.Height = selection.Height;
+        rectangle.Visibility = size.Visibility = Visibility.Visible;
+        Shade(selection);
+        // Physical pixels, as captured for OCR.
+        size.Text = $"{Math.Abs(last.X - first.X)} × {Math.Abs(last.Y - first.Y)}";
+        Canvas.SetLeft(size, selection.X); Canvas.SetTop(size, selection.Bottom + 6 + 24 > canvas.ActualHeight ? selection.Y - 30 : selection.Bottom + 6);
+    }
+    private void Shade(Rect? selection)
+    {
+        var screen = new RectangleGeometry(new Rect(0, 0, canvas.ActualWidth, canvas.ActualHeight));
+        shade.Data = selection is { } hole ? new CombinedGeometry(GeometryCombineMode.Exclude, screen, new RectangleGeometry(hole)) : screen;
     }
     [StructLayout(LayoutKind.Sequential)] private struct NativePoint { public int X; public int Y; }
     [DllImport("user32.dll")] private static extern bool GetCursorPos(out NativePoint point);

@@ -131,6 +131,22 @@ internal static class IntegrationChecks
                 checks.Add(new { id = "winrt.speed_changes_audio_duration_" + language, passed = slow > normal && normal > fast, slowBytes = slow, normalBytes = normal, fastBytes = fast });
                 failed |= !(slow > normal && normal > fast);
             }
+            await Test("hotkeys.chord_parse_and_format", () =>
+            {
+                // Earlier stored values must keep their exact text; invalid combinations are refused.
+                bool roundTrip = new[] { "Alt+1", "Alt+4", "Ctrl+Shift+F1", "Ctrl+Alt+F4", "Ctrl+Alt+R", "Ctrl+Alt+Shift+F12" }
+                    .All(x => Platform.Chord.Parse(x)?.ToString() == x);
+                bool refused = new[] { "", "F1", "Shift+A", "Win+R", "Alt+F4", "Alt+Tab", "Ctrl+Alt+Delete", "Ctrl+Unknown" }
+                    .All(x => Platform.Chord.Parse(x) is null);
+                bool fromPress = Platform.Chord.FromKeyPress(System.Windows.Input.Key.D2, System.Windows.Input.ModifierKeys.Alt)?.ToString() == "Alt+2"
+                    && Platform.Chord.FromKeyPress(System.Windows.Input.Key.LeftCtrl, System.Windows.Input.ModifierKeys.Control) is null;
+                return Task.FromResult(roundTrip && refused && fromPress);
+            });
+            await Test("startup.state_matches_identity", async () =>
+            {
+                var state = await Platform.StartupTaskClient.GetStateAsync();
+                return NativeMethods.IsPackaged ? state != StartupState.NotPackaged : state == StartupState.NotPackaged;
+            });
             await Test("pcm.queued_silence_without_gaps", async () =>
             {
                 // Digital silence only: nothing audible is played.
