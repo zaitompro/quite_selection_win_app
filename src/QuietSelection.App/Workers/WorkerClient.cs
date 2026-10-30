@@ -9,8 +9,15 @@ internal sealed record SpeechPlanResult(double FirstAudioMilliseconds, double El
 
 internal sealed class WorkerClient(IReadOnlyDictionary<Speech.SpeechEngine, string>? modelRoots = null) : IDisposable
 {
+    // Speech engines and their resident state. Model preloading holds this slot for minutes,
+    // so selection reads use their own slot and one-shot helpers (OCR, voice lists) use none.
     private readonly SemaphoreSlim workerSlot = new(1, 1);
+    private readonly SemaphoreSlim selectionSlot = new(1, 1);
     private readonly Selection.SelectionClient selection = new();
+    private readonly Speech.NativeSpeechClient native = new();
+    // WinRT/SAPI return a whole WAV per request; this bounds one response at slow speed.
+    private const int NativeRequestCharacters = 240;
+    internal int? NativeSpeechProcessId => native.ProcessId;
     private readonly Speech.PiperClient piper = new(modelRoots?.GetValueOrDefault(Speech.SpeechEngine.Piper), keepLoaded: true);
     private readonly Speech.SileroClient silero = new(modelRoots?.GetValueOrDefault(Speech.SpeechEngine.Silero), keepLoaded: true);
     private string[] residentVoiceIds = [];
@@ -66,13 +73,16 @@ internal sealed class WorkerClient(IReadOnlyDictionary<Speech.SpeechEngine, stri
         finally { workerSlot.Release(); }
     }
 
-    public void Dispose() { selection.Dispose(); piper.Dispose(); silero.Dispose(); foreach (var client in additional.Values) client.Dispose(); }
+    public void Dispose() { selection.Dispose(); native.Dispose(); piper.Dispose(); silero.Dispose(); foreach (var client in additional.Values) client.Dispose(); }
 
     internal async Task<WorkerResponse> CallAsync(WorkerRequest request, TimeSpan timeout, CancellationToken token)
     {
-        await workerSlot.WaitAsync(token);
+        if (request.Kind is "voices" or "ocr" or "ocr-languages" or "ocr-fixture")
+            return await ExecuteAsync(request, timeout, token); // Own short-lived process each time.
+        var slot = request.Kind == "selection" ? selectionSlot : workerSlot;
+        await slot.WaitAsync(token);
         try { return await ExecuteAsync(request, timeout, token); }
-        finally { workerSlot.Release(); }
+        finally { slot.Release(); }
     }
 
     internal async Task<SpeechPlanResult> SpeakPlanAsync(IReadOnlyList<SpeechSegment> segments, CancellationToken token,
@@ -113,7 +123,7 @@ internal sealed class WorkerClient(IReadOnlyDictionary<Speech.SpeechEngine, stri
                         { client = pair.Value; resident = residentAdditionalIds.Contains(segment.VoiceId); break; }
                     try
                     {
-                        foreach (var part in BoundRequests(segment.Text, client is null ? 80 : 1000))
+                        foreach (var part in BoundRequests(segment.Text, client is null ? NativeRequestCharacters : 1000))
                         {
                             cancellation.ThrowIfCancellationRequested();
                             if (string.IsNullOrWhiteSpace(part)) continue;
@@ -123,7 +133,7 @@ internal sealed class WorkerClient(IReadOnlyDictionary<Speech.SpeechEngine, stri
                                 responses.Add(await client.CallAsync(request, TimeSpan.FromMinutes(15), cancellation, audio: send));
                             else
                             {
-                                var result = await ExecuteAsync(request, TimeSpan.FromMinutes(2), cancellation);
+                                var result = await native.SynthesizeAsync(request, TimeSpan.FromMinutes(2), cancellation);
                                 var wav = result.AudioData ?? throw new QuietException(ErrorCode.SpeechFailure);
                                 try
                                 {
@@ -146,6 +156,7 @@ internal sealed class WorkerClient(IReadOnlyDictionary<Speech.SpeechEngine, stri
                 try { await Play(pcm, cancellation); }
                 finally { Array.Clear(pcm.Data); }
             }, token);
+            if (playback is null) await player.DrainAsync(token); // The last buffer is still playing.
             if (chunks == 0) throw new QuietException(ErrorCode.SpeechFailure);
             return new(first, clock.Elapsed.TotalMilliseconds, maximumGap, chunks, bytes, responses.ToArray());
         }

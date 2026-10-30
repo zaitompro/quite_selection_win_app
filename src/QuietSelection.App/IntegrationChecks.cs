@@ -132,6 +132,65 @@ internal static class IntegrationChecks
                 checks.Add(new { id = "winrt.speed_changes_audio_duration_" + language, passed = slow > normal && normal > fast, slowBytes = slow, normalBytes = normal, fastBytes = fast });
                 failed |= !(slow > normal && normal > fast);
             }
+            await Test("pcm.queued_silence_without_gaps", async () =>
+            {
+                // Digital silence only: nothing audible is played.
+                using var player = new Speech.PcmPlayer();
+                var clock = System.Diagnostics.Stopwatch.StartNew();
+                double secondQueued = 0;
+                for (int i = 0; i < 3; i++)
+                {
+                    await player.PlayAsync(new Speech.PcmChunk(new byte[24_000], 24_000), CancellationToken.None); // 0.5 s
+                    if (i == 0) secondQueued = clock.Elapsed.TotalMilliseconds;
+                }
+                await player.DrainAsync(CancellationToken.None);
+                double total = clock.Elapsed.TotalMilliseconds;
+                checks.Add(new { id = "pcm.queued_silence_timing", passed = true, firstReturnMs = secondQueued, totalMs = total });
+                // The first chunk returns once the device is open (room to queue, no 0.5 s wait),
+                // and the three chunks then play back to back: about 1.5 s of audio.
+                return secondQueued < 450 && total - secondQueued is > 1400 and < 1700;
+            });
+            await Test("pcm.cancel_stops_queued_audio", async () =>
+            {
+                using var player = new Speech.PcmPlayer();
+                using var cancel = new CancellationTokenSource(300);
+                var clock = System.Diagnostics.Stopwatch.StartNew();
+                try
+                {
+                    for (int i = 0; i < 4; i++) await player.PlayAsync(new Speech.PcmChunk(new byte[48_000], 24_000), cancel.Token);
+                    return false;
+                }
+                catch (OperationCanceledException) { return clock.Elapsed.TotalMilliseconds < 700; }
+            });
+            var nativeVoice = voices.FirstOrDefault(x => !x.Id.StartsWith("sapi5:", StringComparison.Ordinal) && x.Language.Split('-')[0] == "en");
+            if (nativeVoice is not null)
+            {
+                // No playback: PCM goes to a discarding consumer. Text is synthetic.
+                string longText = string.Concat(Enumerable.Repeat("This sentence checks resident native speech synthesis. ", 12));
+                SpeechSegment[] plan = [new(longText, "en", nativeVoice.Id, 50)];
+                int? firstPid = null;
+                await Test("native.long_text_one_resident_helper", async () =>
+                {
+                    var result = await worker.SpeakPlanAsync(plan, CancellationToken.None, (_, _) => Task.CompletedTask);
+                    firstPid = worker.NativeSpeechProcessId;
+                    // 672 characters in 240-character requests: three syntheses, one helper.
+                    return result.Syntheses.Length == 3 && result.AudioBytes > 0 && firstPid is not null;
+                });
+                await Test("native.second_plan_reuses_helper", async () =>
+                {
+                    await worker.SpeakPlanAsync([new("A second test.", "en", nativeVoice.Id, 50)], CancellationToken.None, (_, _) => Task.CompletedTask);
+                    return firstPid is not null && worker.NativeSpeechProcessId == firstPid;
+                });
+                await Test("native.cancel_then_recovery", async () =>
+                {
+                    using var cancel = new CancellationTokenSource();
+                    var running = worker.SpeakPlanAsync(plan, cancel.Token, async (_, token) => await Task.Delay(50, token));
+                    await Task.Delay(30); cancel.Cancel();
+                    try { await running; return false; } catch (OperationCanceledException) { }
+                    var recovered = await worker.SpeakPlanAsync([new("Recovered.", "en", nativeVoice.Id, 50)], CancellationToken.None, (_, _) => Task.CompletedTask);
+                    return recovered.AudioBytes > 0;
+                });
+            }
             if (args.Contains("--require-rhvoice"))
                 failed |= !await Speech.SpeechChecks.RunAsync(voices, worker, checks, args);
             await Test("winrt.enumerate_ocr_languages", async () =>

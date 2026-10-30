@@ -17,7 +17,9 @@ internal sealed record WorkerResponse(ErrorCode Error = ErrorCode.None, string T
 
 internal static class WorkerProtocol
 {
-    private const int MaximumMessageBytes = 2_000_000;
+    // A WAV response is base64 in JSON (about 4/3 of its size) plus a small envelope.
+    internal const int MaximumWaveBytes = 6_000_000;
+    private const int MaximumMessageBytes = 8_500_000;
     internal static async Task WriteAsync<T>(Stream stream, T message, CancellationToken token)
     {
         var bytes = JsonSerializer.SerializeToUtf8Bytes(message);

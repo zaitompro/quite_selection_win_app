@@ -37,6 +37,28 @@ internal static class WorkerHost
         WorkerProtocol.WriteAsync(pipe, response, CancellationToken.None).GetAwaiter().GetResult();
     }
 
+    /// <summary>Resident helper for WinRT/SAPI synthesis. Serves requests until the pipe closes.</summary>
+    internal static int RunNativeSpeech(string name)
+    {
+        try
+        {
+            using var pipe = new NamedPipeClientStream(".", name, PipeDirection.InOut, PipeOptions.Asynchronous);
+            pipe.Connect(5_000);
+            while (pipe.IsConnected)
+            {
+                var request = WorkerProtocol.ReadAsync<WorkerRequest>(pipe, CancellationToken.None).GetAwaiter().GetResult();
+                WorkerResponse response;
+                try { response = request.Kind == "synthesize-wave" ? Execute(request) : new(ErrorCode.WorkerFailure); }
+                catch (QuietException ex) { response = new(ex.Code); }
+                catch { response = new(ErrorCode.SpeechFailure); }
+                WorkerProtocol.WriteAsync(pipe, response, CancellationToken.None).GetAwaiter().GetResult();
+            }
+            return 0;
+        }
+        catch (EndOfStreamException) { return 0; }
+        catch { return 1; }
+    }
+
     internal static int Run(string name)
     {
         // The worker owns no UI. The process Main thread is MTA and exits after one request.
@@ -83,7 +105,7 @@ internal static class WorkerHost
                 {
                     if (request.Kind == "synthesize-wave")
                     {
-                        if (length is <= 44 or > 1_000_000) throw new QuietException(ErrorCode.SpeechFailure);
+                        if (length is <= 44 or > WorkerProtocol.MaximumWaveBytes) throw new QuietException(ErrorCode.SpeechFailure);
                         var bytes = new byte[length];
                         System.Runtime.InteropServices.Marshal.Copy(audio, bytes, 0, bytes.Length);
                         return new(AudioBytes: length, AudioData: bytes);

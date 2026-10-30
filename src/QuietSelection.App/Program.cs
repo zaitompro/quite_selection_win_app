@@ -11,6 +11,7 @@ internal static class Program
         if (args.Length == 1 && args[0] == "--runtime-check") return 0;
         if (args.Length == 2 && args[0] == "--worker") return WorkerHost.Run(args[1]);
         if (args.Length == 2 && args[0] == "--selection-worker") return WorkerHost.RunSelection(args[1]);
+        if (args.Length == 2 && args[0] == "--native-speech-worker") return WorkerHost.RunNativeSpeech(args[1]);
         int exitCode = 0;
         var thread = new Thread(() =>
         {
