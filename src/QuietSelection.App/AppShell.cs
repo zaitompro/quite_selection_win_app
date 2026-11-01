@@ -20,6 +20,8 @@ internal sealed partial class AppShell : IDisposable
     private readonly Application application;
     private readonly SettingsStore store;
     private readonly WorkerClient worker = new();
+    // Keeps the last translation model loaded between readings (released after idle minutes).
+    private readonly ResidentTranslationClient translator = new(TranslationClient.DefaultModelRoot);
     private readonly OperationController operations = new();
     private readonly Mutex mutex;
     private readonly bool ownsMutex;
@@ -283,7 +285,8 @@ internal sealed partial class AppShell : IDisposable
         try
         {
             var progress = new Progress<string>(value => { if (!cancellation.IsCancellationRequested && modelPreparation == cancellation) { ModelStatus = value; RaiseChanged(); } });
-            if (download) await ModelPreparation.PrepareAsync(null, progress, cancellation.Token);
+            // The resident worker holds model files open; they cannot be replaced while it runs.
+            if (download) { await translator.ResetAsync(); await ModelPreparation.PrepareAsync(null, progress, cancellation.Token); }
             else
             {
                 await ModelPreparation.VerifyAsync(TranslationClient.DefaultModelRoot, cancellation.Token);
@@ -493,7 +496,7 @@ internal sealed partial class AppShell : IDisposable
                 {
                     if (PreparingModels) throw new QuietException(ErrorCode.ModelMissing);
                     await ModelPreparation.VerifyCachedAsync(TranslationClient.DefaultModelRoot, operation.Token);
-                    text = await new TranslationClient(TranslationClient.DefaultModelRoot).TranslateAsync(plan, snapshot.Primary.Language, operation.Token);
+                    text = await translator.TranslateAsync(plan, snapshot.Primary.Language, operation.Token);
                 }
                 operation.Token.ThrowIfCancellationRequested();
             }
@@ -507,7 +510,7 @@ internal sealed partial class AppShell : IDisposable
     {
         operations.Stop(); modelPreparation?.Cancel(); voiceDownload?.Cancel();
         foreach (var set in ResidentVoiceSets) set.Cancel();
-        worker.Dispose(); tray?.Dispose(); indicator?.Close(); hotkeys?.Dispose(); openSettings?.Dispose();
+        worker.Dispose(); translator.Dispose(); tray?.Dispose(); indicator?.Close(); hotkeys?.Dispose(); openSettings?.Dispose();
         if (ownsMutex) mutex.ReleaseMutex();
         mutex.Dispose();
     }

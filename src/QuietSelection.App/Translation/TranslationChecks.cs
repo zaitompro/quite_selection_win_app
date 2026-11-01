@@ -107,6 +107,38 @@ internal static class TranslationChecks
                 try { await client.TranslateAsync([new(string.Concat(Enumerable.Repeat("これは翻訳のテストです。", 1000)), "ja")], "ru", cancel.Token); return false; }
                 catch (OperationCanceledException) { return watch.Elapsed < TimeSpan.FromSeconds(5); }
             });
+            using (var resident = new ResidentTranslationClient(modelRoot))
+            {
+                const string english = "Please send the report by Friday. Thank you for your help.";
+                const string japanese = "会議は明日の午後三時に始まります。";
+                int? firstProcess = null; double firstMs = 0, secondMs = 0;
+                await Test("resident.translate_and_keep_worker", async () =>
+                {
+                    var watch = Stopwatch.StartNew();
+                    string first = await resident.TranslateAsync([new(english, "en")], "ru", CancellationToken.None);
+                    firstMs = watch.Elapsed.TotalMilliseconds; firstProcess = resident.ProcessId;
+                    watch.Restart();
+                    string second = await resident.TranslateAsync([new(english, "en")], "ru", CancellationToken.None);
+                    secondMs = watch.Elapsed.TotalMilliseconds;
+                    checks.Add(new { id = "resident.timing", passed = true, firstMs, secondMs });
+                    return first == second && first.Any(c => c is >= '\u0400' and <= '\u04ff')
+                        && firstProcess is not null && resident.ProcessId == firstProcess && secondMs < firstMs;
+                });
+                await Test("resident.switch_language_pair", async () =>
+                {
+                    string ja = await resident.TranslateAsync([new(japanese, "ja")], "ru", CancellationToken.None);
+                    string mixed = await resident.TranslateAsync([new("Hello world. ", "en"), new(japanese, "ja")], "ru", CancellationToken.None);
+                    return ja.Any(c => c is >= '\u0400' and <= '\u04ff') && mixed.Any(c => c is >= '\u0400' and <= '\u04ff') && resident.ProcessId == firstProcess;
+                });
+                await Test("resident.cancel_then_recovery", async () =>
+                {
+                    using var cancel = new CancellationTokenSource(TimeSpan.FromMilliseconds(150));
+                    try { await resident.TranslateAsync([new(string.Concat(Enumerable.Repeat("This is a cancellation test. ", 1000)), "en")], "ru", cancel.Token); return false; }
+                    catch (OperationCanceledException) { }
+                    string recovered = await resident.TranslateAsync([new(english, "en")], "ru", CancellationToken.None);
+                    return recovered.Length > 0 && resident.ProcessId != firstProcess;
+                });
+            }
             Directory.CreateDirectory(reports);
             await File.WriteAllTextAsync(Path.Combine(reports, "translation.json"), JsonSerializer.Serialize(new
             { syntheticDataOnly = true, offlineWorker = "socket audit denied; no loader in inference process", lastFailure = client.LastFailure, peakWorkingSetBytes = client.PeakWorkingSetBytes, completedUtc = DateTimeOffset.UtcNow, checks }, new JsonSerializerOptions { WriteIndented = true }));

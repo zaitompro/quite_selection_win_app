@@ -1,4 +1,5 @@
-"""One request per process. Bounded binary IPC; no network, text files, or logs."""
+"""Translation worker: one request per process, or many with --serve (the model stays loaded).
+Bounded binary IPC; no network, text files, or logs. Text is never kept between requests."""
 import sys
 import os
 import json
@@ -122,30 +123,53 @@ class Engine:
         return "".join(output)
 
 
-def main():
+def read_frame():
+    size_bytes = sys.stdin.buffer.read(4)
+    if len(size_bytes) == 0:
+        return None  # The parent closed the pipe: exit normally.
+    if len(size_bytes) != 4:
+        raise ValueError("INVALID_FRAME")
+    size = struct.unpack("<i", size_bytes)[0]
+    if not 0 < size <= WIRE_LIMIT:
+        raise ValueError("INVALID_FRAME")
+    data = sys.stdin.buffer.read(size)
+    if len(data) != size:
+        raise ValueError("INVALID_FRAME")
+    return json.loads(data)
+
+
+def respond(engine, request):
     response = {"Success": False, "Text": "", "Failure": "TRANSLATION_FAILED"}
     try:
-        size_bytes = sys.stdin.buffer.read(4)
-        if len(size_bytes) != 4:
-            raise ValueError("INVALID_FRAME")
-        size = struct.unpack("<i", size_bytes)[0]
-        if not 0 < size <= WIRE_LIMIT:
-            raise ValueError("INVALID_FRAME")
-        data = sys.stdin.buffer.read(size)
-        if len(data) != size:
-            raise ValueError("INVALID_FRAME")
-        request = json.loads(data)
-        response = {"Success": True, "Text": Engine(sys.argv[1]).run(request), "Failure": ""}
+        response = {"Success": True, "Text": engine.run(request), "Failure": "", "ProcessId": os.getpid()}
     except BaseException as error:
         # Exceptions from tokenizers may contain input. Never serialize them.
         response["Failure"] = "MEMORY_LIMIT" if isinstance(error, MemoryError) else "RUNTIME_ERROR" if isinstance(error, RuntimeError) else "ENGINE_FAILURE"
     encoded = json.dumps(response, ensure_ascii=False).encode("utf-8")
+    del response
     if len(encoded) > WIRE_LIMIT:
-        return 1
+        return False
     sys.stdout.buffer.write(struct.pack("<i", len(encoded)))
     sys.stdout.buffer.write(encoded)
     sys.stdout.buffer.flush()
-    return 0
+    return True
+
+
+def main():
+    engine = Engine(sys.argv[1])
+    serve = len(sys.argv) > 2 and sys.argv[2] == "--serve"
+    while True:
+        try:
+            request = read_frame()
+        except BaseException:
+            return 1  # A broken frame means the stream is out of sync.
+        if request is None:
+            return 0
+        if not respond(engine, request):
+            return 1
+        del request
+        if not serve:
+            return 0
 
 
 if __name__ == "__main__":
