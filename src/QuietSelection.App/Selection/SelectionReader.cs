@@ -37,6 +37,44 @@ internal static class SelectionReader
         }
     }
 
+    /// <summary>
+    /// Text under a physical screen point: the paragraph of a text control or the name of the element
+    /// there. Elements of <paramref name="excludedProcess"/> (the app's own windows) are ignored.
+    /// </summary>
+    internal static SelectionResult ReadAtPoint(int x, int y, int excludedProcess)
+    {
+        var trace = new List<string>();
+        var clock = Stopwatch.StartNew();
+        for (int attempt = 0; ; attempt++)
+        {
+            int status = NativeMethods.qs_read_at_point(x, y, (uint)TextLimits.Maximum, (uint)excludedProcess, out var textPointer, out var diagnosticPointer);
+            string text = textPointer == 0 ? "" : NativeMethods.TakeString(textPointer);
+            trace.Add(diagnosticPointer == 0 ? "" : NativeMethods.TakeString(diagnosticPointer));
+            var error = ToError(status);
+            if (error == ErrorCode.None)
+            {
+                try { return new(TextLimits.CombineSelection([text]), ErrorCode.None, Summary(trace, attempt, clock)); }
+                catch (QuietException ex) { return new("", ex.Code, Summary(trace, attempt, clock)); }
+            }
+            // Only provider hiccups are retried: an element without text stays without text.
+            if (error != ErrorCode.ProviderFailure || attempt >= 1) return new("", error, Summary(trace, attempt, clock));
+            Thread.Sleep(RetryDelays[1]);
+        }
+    }
+
+    private static ErrorCode ToError(int status) => status switch
+    {
+        0 => ErrorCode.None,
+        1 => ErrorCode.NoSelection,
+        2 => ErrorCode.SelectionUnavailable,
+        3 => ErrorCode.NoFocusedElement,
+        4 => ErrorCode.AccessDenied,
+        5 => ErrorCode.ProtectedField,
+        6 => ErrorCode.TooLong,
+        7 => ErrorCode.SourceChanged,
+        _ => ErrorCode.ProviderFailure
+    };
+
     private static string Summary(List<string> trace, int attempt, Stopwatch clock) =>
         $"attempts={attempt + 1}; ms={clock.ElapsedMilliseconds}; " + string.Join(" | ", trace.Distinct());
 
@@ -45,19 +83,7 @@ internal static class SelectionReader
         int status = NativeMethods.qs_read_selection(sourceWindow, (uint)TextLimits.Maximum, out var textPointer, out var diagnosticPointer);
         string text = textPointer == 0 ? "" : NativeMethods.TakeString(textPointer);
         string diagnostic = diagnosticPointer == 0 ? "" : NativeMethods.TakeString(diagnosticPointer);
-        var error = status switch
-        {
-            0 => ErrorCode.None,
-            1 => ErrorCode.NoSelection,
-            2 => ErrorCode.SelectionUnavailable,
-            3 => ErrorCode.NoFocusedElement,
-            4 => ErrorCode.AccessDenied,
-            5 => ErrorCode.ProtectedField,
-            6 => ErrorCode.TooLong,
-            7 => ErrorCode.SourceChanged,
-            _ => ErrorCode.ProviderFailure
-        };
-        return (error, text, diagnostic);
+        return (ToError(status), text, diagnostic);
     }
 }
 

@@ -15,6 +15,18 @@ internal static class Program
         if (args.Length == 1 && args[0] == "--magnifier-crash-probe") return Magnifier.MagnifierChecks.CrashProbe();
         if (args.Length == 1 && args[0] == "--magnifier-read") return Magnifier.MagnifierChecks.ReadProbe();
         if (args.Length == 2 && args[0] == "--magnifier-host") return Magnifier.MagnifierHost.Run(args[1]);
+        if (args.Length == 2 && args[0] == "--pointer-probe")
+        {
+            // Test aid: compares the text under the pointer with an expected synthetic phrase; never prints the text.
+            Platform.NativeMethods.GetCursorPos(out var point);
+            var result = Selection.SelectionReader.ReadAtPoint(point.X, point.Y, 0);
+            Console.Out.Write(System.Text.Json.JsonSerializer.Serialize(new
+            {
+                error = result.Error.ToString(), matches = result.Text.Contains(args[1], StringComparison.Ordinal),
+                length = result.Text.Length, diagnostic = result.Diagnostic
+            }));
+            return 0;
+        }
         if (args.Length == 2 && args[0] == "--selection-probe")
         {
             // Test aid: compares the foreground selection with an expected synthetic phrase; never prints the text.

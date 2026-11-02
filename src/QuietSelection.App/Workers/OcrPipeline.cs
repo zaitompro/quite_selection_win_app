@@ -49,6 +49,60 @@ internal static partial class OcrPipeline
         throw new QuietException(ErrorCode.OcrEmpty);
     }
 
+    /// <summary>
+    /// Recognizes the capture around the pointer and keeps only the paragraph under it: the line
+    /// containing (or nearest to) the pointer plus neighbouring lines of the same column with
+    /// line-sized gaps.
+    /// </summary>
+    internal static WorkerResponse RecognizeAt(Bitmap capture, string language, System.Drawing.Point pointer)
+    {
+        NativeMethods.Check(NativeMethods.qs_ocr_languages(out var listPointer, out uint maximumDimension), ErrorCode.OcrUnavailable);
+        var installed = NativeMethods.TakeString(listPointer).Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        var languages = new List<string> { language };
+        foreach (var other in new[] { "ru", "en", "ja" })
+            if (other != language.Split('-')[0] && installed.FirstOrDefault(x => x.Split('-')[0] == other) is { } tag) languages.Add(tag);
+        int scale = capture.Height < SmallHeight ? 3 : capture.Height < MediumHeight ? 2 : 1;
+        while (scale > 1 && (capture.Width * scale + 64 > maximumDimension || capture.Height * scale + 64 > maximumDimension)) scale--;
+        int margin = Margin(capture.Height, scale);
+        using var prepared = Prepare(capture, scale);
+        foreach (var candidate in languages)
+        {
+            var lines = RunLines(prepared, candidate)
+                .Select(x => x with { Left = (x.Left - margin) / scale, Top = (x.Top - margin) / scale, Right = (x.Right - margin) / scale, Bottom = (x.Bottom - margin) / scale })
+                .OrderBy(x => x.Top).ToList();
+            if (lines.Count == 0) continue;
+            var text = OcrLayout.PickParagraph(lines, pointer.X, pointer.Y);
+            if (text.Length == 0) throw new QuietException(ErrorCode.OcrEmpty);
+            if (text.Length > TextLimits.Maximum) throw new QuietException(ErrorCode.TooLong);
+            return new(Text: SpacesBetweenCjk().Replace(text, "").Trim());
+        }
+        throw new QuietException(ErrorCode.OcrEmpty);
+    }
+
+    private static List<OcrLine> RunLines(Bitmap bitmap, string language)
+    {
+        var data = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+        try
+        {
+            int result = NativeMethods.qs_recognize_lines(data.Scan0, bitmap.Width, bitmap.Height, language, out var text);
+            if (result == NativeMethods.ErrorNotFoundHResult) return [];
+            NativeMethods.Check(result, ErrorCode.OcrFailure);
+            var lines = new List<OcrLine>();
+            foreach (var row in NativeMethods.TakeString(text).Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            {
+                int tab = row.IndexOf('\t');
+                if (tab < 0) continue;
+                var box = row[..tab].Split(' ');
+                if (box.Length != 4 || !box.All(v => int.TryParse(v, out _))) continue;
+                lines.Add(new(int.Parse(box[0]), int.Parse(box[1]), int.Parse(box[2]), int.Parse(box[3]), row[(tab + 1)..]));
+            }
+            return lines;
+        }
+        finally { bitmap.UnlockBits(data); }
+    }
+
+    private static int Margin(int height, int scale) => Math.Max(24, height * scale / 6);
+
     private static string Run(Bitmap bitmap, string language)
     {
         var data = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
@@ -107,7 +161,7 @@ internal static partial class OcrPipeline
             finally { normalized.UnlockBits(target); }
 
             // Margin around the text: OCR misses lines that touch the image border.
-            int margin = Math.Max(24, height * scale / 6);
+            int margin = Margin(height, scale);
             var result = new Bitmap(width * scale + 2 * margin, height * scale + 2 * margin, PixelFormat.Format32bppArgb);
             using var graphics = Graphics.FromImage(result);
             graphics.Clear(Color.White);

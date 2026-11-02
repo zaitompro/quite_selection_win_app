@@ -499,6 +499,7 @@ internal sealed partial class SettingsWindow : Window
         ReadingCommand.PrimaryVoice => "Прочитать основным голосом",
         ReadingCommand.Region => "Распознать и прочитать область",
         ReadingCommand.Translate => "Перевести и прочитать",
+        ReadingCommand.Pointer => "Прочитать под указателем",
         ReadingCommand.ToggleMagnifier => "Лупа: включить или выключить",
         ReadingCommand.InvertColors => "Лупа: негатив",
         ReadingCommand.FollowCaret => "Лупа: следовать за кареткой",
@@ -511,6 +512,7 @@ internal sealed partial class SettingsWindow : Window
         ReadingCommand.PrimaryVoice => "Читает всё выделенное одним основным голосом.",
         ReadingCommand.Region => "Обведите область экрана — текст будет распознан и прочитан.",
         ReadingCommand.Translate => "Переводит выделенное на основной язык и читает перевод.",
+        ReadingCommand.Pointer => "Наведите указатель мыши на абзац, кнопку или надпись и нажмите сочетание. Если программа не отдаёт текст, он распознаётся с экрана.",
         ReadingCommand.ToggleMagnifier => "Возвращает обычный масштаб или последнее увеличение.",
         ReadingCommand.InvertColors => "Инвертирует цвета всего экрана.",
         ReadingCommand.FollowCaret => "Включает или выключает слежение за текстовым курсором при наборе.",
@@ -519,7 +521,7 @@ internal sealed partial class SettingsWindow : Window
 
     private static string CommandGlyph(ReadingCommand command) => command switch
     {
-        ReadingCommand.Selection => "\uE8D2", ReadingCommand.PrimaryVoice => "\uE767", ReadingCommand.Region => "\uE7A8", ReadingCommand.Translate => "\uE774",
+        ReadingCommand.Selection => "\uE8D2", ReadingCommand.PrimaryVoice => "\uE767", ReadingCommand.Region => "\uE7A8", ReadingCommand.Translate => "\uE774", ReadingCommand.Pointer => "\uE7C9",
         ReadingCommand.ToggleMagnifier => "\uE71E", ReadingCommand.InvertColors => "\uE790", ReadingCommand.FollowCaret => "\uE8AC", _ => "\uE708"
     };
 
@@ -532,7 +534,7 @@ internal sealed partial class SettingsWindow : Window
         shortcutButtons.Clear();
 
         Add(Ui.Section("Чтение"));
-        foreach (var command in new[] { ReadingCommand.Selection, ReadingCommand.PrimaryVoice, ReadingCommand.Region, ReadingCommand.Translate })
+        foreach (var command in new[] { ReadingCommand.Selection, ReadingCommand.PrimaryVoice, ReadingCommand.Pointer, ReadingCommand.Region, ReadingCommand.Translate })
             Add(ShortcutRow(command));
         var repeat = Ui.Secondary("Во время чтения повтор любой команды чтения останавливает его.");
         repeat.Margin = new(4, 4, 0, 0); Add(repeat);

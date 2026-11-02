@@ -463,6 +463,26 @@ internal sealed partial class AppShell : IDisposable
         });
     }
 
+    // Text under the mouse pointer: UI Automation first (paragraph of a text control or the name
+    // of a button, label, menu or list item), then recognition of the screen around the pointer.
+    private async Task<string> ReadUnderPointerAsync(OperationContext operation, string ocrLanguage)
+    {
+        NativeMethods.GetCursorPos(out var point);
+        nint window = NativeMethods.GetAncestor(NativeMethods.WindowFromPoint(point), 2); // GA_ROOT, for the log.
+        var at = new PixelRegion(point.X, point.Y, 1, 1);
+        operation.Transition(OperationState.ReadingSelection);
+        try
+        {
+            return (await worker.CallAsync(new("point", (long)window, Region: at, OwnerProcess: Environment.ProcessId), TimeSpan.FromSeconds(2), operation.Token)).Text;
+        }
+        catch (QuietException ex) when (ex.Code is ErrorCode.SelectionUnavailable or ErrorCode.NoSelection or ErrorCode.ProviderFailure
+            or ErrorCode.SelectionTimeout && NativeMethods.IsPackaged)
+        {
+            operation.Transition(OperationState.Recognizing);
+            return (await worker.CallAsync(new("ocr-point", (long)window, Language: ocrLanguage, Region: at), TimeSpan.FromSeconds(30), operation.Token)).Text;
+        }
+    }
+
     private Task ReadAsync(ReadingCommand command)
     {
         nint source = NativeMethods.GetForegroundWindow();
@@ -479,6 +499,8 @@ internal sealed partial class AppShell : IDisposable
                 operation.Transition(OperationState.Recognizing);
                 text = (await worker.CallAsync(new("ocr", (long)source, Language: snapshot.OcrLanguage, Region: region), TimeSpan.FromSeconds(60), operation.Token)).Text;
             }
+            else if (command == ReadingCommand.Pointer)
+                text = await ReadUnderPointerAsync(operation, snapshot.OcrLanguage);
             else
             {
                 operation.Transition(OperationState.ReadingSelection);

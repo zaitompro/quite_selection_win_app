@@ -80,7 +80,7 @@ internal sealed class WorkerClient(IReadOnlyDictionary<Speech.SpeechEngine, stri
     {
         if (request.Kind is "voices" or "ocr" or "ocr-languages" or "ocr-fixture" or "capture-probe")
             return await ExecuteAsync(request, timeout, token); // Own short-lived process each time.
-        var slot = request.Kind == "selection" ? selectionSlot : workerSlot;
+        var slot = request.Kind is "selection" or "point" ? selectionSlot : workerSlot;
         await slot.WaitAsync(token);
         try { return await ExecuteAsync(request, timeout, token); }
         finally { slot.Release(); }
@@ -198,12 +198,12 @@ internal sealed class WorkerClient(IReadOnlyDictionary<Speech.SpeechEngine, stri
 
     private async Task<WorkerResponse> ExecuteAsync(WorkerRequest request, TimeSpan timeout, CancellationToken token)
     {
-        if (request.Kind == "selection")
+        if (request.Kind is "selection" or "point")
         {
             WorkerResponse result;
             try { result = await selection.ReadAsync(request, timeout, token); }
-            catch (QuietException ex) { Selection.SelectionDiagnostics.Record(request.SourceWindow, ex.Code, "helper"); throw; }
-            Selection.SelectionDiagnostics.Record(request.SourceWindow, result.Error, result.Diagnostic);
+            catch (QuietException ex) { Selection.SelectionDiagnostics.Record(request.SourceWindow, ex.Code, request.Kind + ": helper"); throw; }
+            Selection.SelectionDiagnostics.Record(request.SourceWindow, result.Error, request.Kind + ": " + result.Diagnostic);
             if (result.Error != ErrorCode.None) throw new QuietException(result.Error);
             return result;
         }

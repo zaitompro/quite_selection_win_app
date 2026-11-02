@@ -3,7 +3,8 @@ using System.Text.Json;
 namespace QuietSelection.App.Workers;
 
 internal sealed record WorkerRequest(string Kind, long SourceWindow = 0, string Text = "", string VoiceId = "",
-    int Speed = 50, string Language = "ru", PixelRegion? Region = null, string[]? VoiceIds = null, string? Fixture = null);
+    int Speed = 50, string Language = "ru", PixelRegion? Region = null, string[]? VoiceIds = null, string? Fixture = null,
+    int OwnerProcess = 0);
 internal sealed record WorkerResponse(ErrorCode Error = ErrorCode.None, string Text = "", VoiceInfo[]? Voices = null,
     string[]? Languages = null, long AudioBytes = 0, int MaximumDimension = 0,
     long PeakWorkingSetBytes = 0, long PrivateBytes = 0, long PeakPrivateBytes = 0,

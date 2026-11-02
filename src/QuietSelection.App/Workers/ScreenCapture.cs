@@ -45,6 +45,32 @@ internal static class ScreenCapture
         return fitted;
     }
 
+    /// <summary>
+    /// The on-screen area around the pointer (given in desktop coordinates), as the user sees it, and
+    /// where the pointer is inside that image. Under magnification the pointer is drawn at
+    /// (desktop − offset) × level.
+    /// </summary>
+    internal static Bitmap CaptureAroundPointer(int desktopX, int desktopY, int width, int height, out System.Drawing.Point pointer)
+    {
+        float level = 1; int offsetX = 0, offsetY = 0;
+        if (MagInitialize())
+        {
+            try { if (!MagGetFullscreenTransform(out level, out offsetX, out offsetY) || level < 1) { level = 1; offsetX = offsetY = 0; } }
+            finally { MagUninitialize(); }
+        }
+        int screenWidth = GetSystemMetrics(0), screenHeight = GetSystemMetrics(1);
+        int px = (int)Math.Round((desktopX - offsetX) * (double)level), py = (int)Math.Round((desktopY - offsetY) * (double)level);
+        int x = Math.Clamp(px - width / 2, 0, Math.Max(0, screenWidth - width));
+        int y = Math.Clamp(py - height / 2, 0, Math.Max(0, screenHeight - height));
+        width = Math.Min(width, screenWidth - x); height = Math.Min(height, screenHeight - y);
+        if (width < 8 || height < 8) throw new QuietException(ErrorCode.CaptureFailed);
+        var captured = new Bitmap(width, height, PixelFormat.Format32bppArgb);
+        using (var graphics = Graphics.FromImage(captured))
+            graphics.CopyFromScreen(x, y, 0, 0, captured.Size, CopyPixelOperation.SourceCopy);
+        pointer = new System.Drawing.Point(px - x, py - y);
+        return captured;
+    }
+
     /// <summary>Mean brightness of the left and right thirds; used by checks with a synthetic striped window.</summary>
     internal static (double Left, double Right) Fingerprint(Bitmap bitmap)
     {

@@ -103,6 +103,17 @@ internal static class IntegrationChecks
                 var result = await worker.CallAsync(new("selection", (long)handle), TimeSpan.FromSeconds(2), CancellationToken.None);
                 return result.Text == "前置き。";
             });
+            await Test("ocr.text_under_point", async () =>
+            {
+                // Recognition needs package identity, so this runs with -Installed. No pointer is moved:
+                // the point is passed in the request.
+                if (!NativeMethods.IsPackaged) return true;
+                field.Select(0, 0); await Task.Delay(150);
+                var origin = field.PointToScreen(new System.Windows.Point(40, 20)); // Physical pixels, first line.
+                var result = await worker.CallAsync(new("ocr-point", Region: new PixelRegion((int)origin.X, (int)origin.Y, 1, 1), Language: "ja"),
+                    TimeSpan.FromSeconds(30), CancellationToken.None);
+                return result.Text.Replace(" ", "").Contains("読み上げのテスト", StringComparison.Ordinal);
+            });
             if (args.Contains("--selection-tests"))
             {
                 bool identity = NativeMethods.IsPackaged;

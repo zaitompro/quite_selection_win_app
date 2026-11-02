@@ -20,11 +20,13 @@ internal sealed class SelectionClient : IDisposable
         else deadline.CancelAfter(timeout);
         using var watchCancellation = new CancellationTokenSource();
         bool sourceChanged = false;
+        // Reading under the pointer does not depend on the foreground window.
+        bool guardForeground = request.Kind == "selection";
         var watch = Task.Run(async () =>
         {
             try
             {
-                while (true)
+                while (guardForeground)
                 {
                     if (NativeMethods.GetForegroundWindow() != (nint)request.SourceWindow)
                     {
@@ -58,7 +60,7 @@ internal sealed class SelectionClient : IDisposable
             await WorkerProtocol.WriteAsync(pipe, request, deadline.Token);
             var result = await WorkerProtocol.ReadAsync<WorkerResponse>(pipe, deadline.Token);
             token.ThrowIfCancellationRequested();
-            if (sourceChanged || NativeMethods.GetForegroundWindow() != (nint)request.SourceWindow)
+            if (sourceChanged || (guardForeground && NativeMethods.GetForegroundWindow() != (nint)request.SourceWindow))
                 throw new QuietException(ErrorCode.SourceChanged);
             // A provider's normal error is a complete response, not a broken IPC stream.
             return result;

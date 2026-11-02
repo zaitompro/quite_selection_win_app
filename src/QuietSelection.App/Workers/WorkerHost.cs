@@ -28,9 +28,11 @@ internal static class WorkerHost
         WorkerResponse response;
         try
         {
-            if (request.Kind == "selection")
+            if (request.Kind is "selection" or "point")
             {
-                var selection = SelectionReader.Read((nint)request.SourceWindow);
+                var selection = request.Kind == "point" && request.Region is { } point
+                    ? SelectionReader.ReadAtPoint(point.X, point.Y, request.OwnerProcess)
+                    : SelectionReader.Read((nint)request.SourceWindow);
                 response = new(selection.Error, selection.Text, ProcessId: Environment.ProcessId, Diagnostic: selection.Diagnostic);
             }
             else response = new(ErrorCode.WorkerFailure);
@@ -138,6 +140,14 @@ internal static class WorkerHost
                         throw new QuietException(ErrorCode.SourceChanged);
                     return Recognize(captured, request.Language);
                 }
+            case "ocr-point":
+                // Fallback for text under the pointer that UI Automation does not expose. Only the
+                // area around the pointer is captured; only the paragraph under it is kept.
+                if (!NativeMethods.IsPackaged)
+                    throw new QuietException(ErrorCode.PackageIdentityRequired);
+                var pointer = request.Region ?? throw new QuietException(ErrorCode.CaptureFailed);
+                using (var around = ScreenCapture.CaptureAroundPointer(pointer.X, pointer.Y, 1200, 360, out var inImage))
+                    return OcrPipeline.RecognizeAt(around, request.Language, inImage);
             case "capture-probe":
                 // Checks only: two brightness numbers of a synthetic striped window, no image is returned.
                 if (request.Region is not { } probeRegion) return new(Text: "ERR no region");

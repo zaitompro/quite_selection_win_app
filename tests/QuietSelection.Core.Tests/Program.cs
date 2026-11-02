@@ -400,6 +400,24 @@ Test("settings.resident_piper_legacy_default_and_opt_out", () =>
     legacy.KeepPiperLoaded = false;
     Check(!legacy.Snapshot().KeepPiperLoaded);
 });
+Test("ocr_layout.paragraph_under_pointer", () =>
+{
+    // Two paragraphs of a column (20 px lines, 6 px leading, 30 px between paragraphs) and a side label.
+    OcrLine[] lines =
+    [
+        new(10, 10, 400, 30, "First paragraph, line one"),
+        new(10, 36, 380, 56, "line two."),
+        new(10, 86, 400, 106, "Second paragraph, line one"),
+        new(10, 112, 300, 132, "line two."),
+        new(600, 112, 700, 124, "Label"),
+    ];
+    Check(OcrLayout.PickParagraph(lines, 50, 40) == "First paragraph, line one\nline two.");
+    Check(OcrLayout.PickParagraph(lines, 50, 100) == "Second paragraph, line one\nline two.");
+    Check(OcrLayout.PickParagraph(lines, 650, 118) == "Label");                  // Different height and column.
+    Check(OcrLayout.PickParagraph(lines, 50, 70) == "First paragraph, line one\nline two."); // Between paragraphs: the nearer one.
+    Check(OcrLayout.PickParagraph(lines, 410, 20) == "First paragraph, line one\nline two."); // Just right of a line.
+    Check(OcrLayout.PickParagraph(lines, 900, 20) == "");                         // Empty area.
+});
 foreach (var test in tests)
 {
     try { await test.Body(); Console.WriteLine("PASS " + test.Name); }

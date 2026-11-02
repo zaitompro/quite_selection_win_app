@@ -13,6 +13,7 @@
 #include <winrt/Windows.ApplicationModel.h>
 #include <winrt/Windows.ApplicationModel.Activation.h>
 #include <string>
+#include <algorithm>
 #include <cstring>
 #include "SapiSpeech.h"
 
@@ -122,6 +123,43 @@ extern "C" __declspec(dllexport) HRESULT __cdecl qs_recognize(
         for (auto const& line : recognized.Lines()) {
             if (!output.empty()) output += L'\n';
             output += line.Text();
+        }
+        copy_string(output, result);
+        bitmap.Close(); writer.Close();
+        return S_OK;
+    } catch (...) { return to_hresult(); }
+}
+
+// Like qs_recognize, but each line is "left top right bottom<TAB>text" in image pixels (the union
+// of its word boxes), so the caller can pick the line under the pointer.
+extern "C" __declspec(dllexport) HRESULT __cdecl qs_recognize_lines(
+    uint8_t const* pixels, int width, int height, wchar_t const* language_tag, wchar_t** result) noexcept {
+    *result = nullptr;
+    try {
+        Apartment apartment;
+        auto limit = OcrEngine::MaxImageDimension();
+        if (width < 8 || height < 8 || static_cast<uint32_t>(width) > limit || static_cast<uint32_t>(height) > limit)
+            return E_INVALIDARG;
+        auto engine = OcrEngine::TryCreateFromLanguage(Windows::Globalization::Language(language_tag));
+        if (!engine) return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
+        DataWriter writer;
+        auto size = static_cast<size_t>(width) * height * 4;
+        writer.WriteBytes(array_view<uint8_t const>(pixels, pixels + size));
+        auto bitmap = SoftwareBitmap::CreateCopyFromBuffer(writer.DetachBuffer(), BitmapPixelFormat::Bgra8,
+            width, height, BitmapAlphaMode::Ignore);
+        auto recognized = engine.RecognizeAsync(bitmap).get();
+        std::wstring output;
+        for (auto const& line : recognized.Lines()) {
+            float left = 1e9f, top = 1e9f, right = -1e9f, bottom = -1e9f;
+            for (auto const& word : line.Words()) {
+                auto box = word.BoundingRect();
+                left = (std::min)(left, box.X); top = (std::min)(top, box.Y);
+                right = (std::max)(right, box.X + box.Width); bottom = (std::max)(bottom, box.Y + box.Height);
+            }
+            if (right < left) continue;
+            if (!output.empty()) output += L'\n';
+            output += std::to_wstring(static_cast<int>(left)) + L' ' + std::to_wstring(static_cast<int>(top)) + L' '
+                + std::to_wstring(static_cast<int>(right)) + L' ' + std::to_wstring(static_cast<int>(bottom)) + L'\t' + std::wstring(line.Text());
         }
         copy_string(output, result);
         bitmap.Close(); writer.Close();
