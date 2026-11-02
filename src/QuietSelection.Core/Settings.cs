@@ -24,6 +24,7 @@ public sealed class AppSettings
     public Dictionary<ReadingCommand, string> Hotkeys { get; set; } = [];
     public bool StartAtLogin { get; set; }
     public bool ShowReadingIndicator { get; set; } = true;
+    public MagnifierSettings Magnifier { get; set; } = new();
     public string OcrLanguage { get; set; } = "ru";
 
     public AppSettings Snapshot() => JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(this))!;
@@ -40,6 +41,9 @@ public sealed class AppSettings
             all.Select(x => x.Language).Distinct().Count() != all.Length ||
             !SupportedLanguages.ContainsKey(OcrLanguage) ||
             Hotkeys.Values.Where(x => x.Length > 0).Distinct().Count() != Hotkeys.Values.Count(x => x.Length > 0))
+            throw new QuietException(ErrorCode.InvalidSettings);
+        if (Magnifier is null || !MagnifierSettings.Modifiers.Contains(Magnifier.Modifier) ||
+            Magnifier.Step is < 1.05 or > 2.0 || Magnifier.LastScale is < 1.0 or > MagnifierMath.MaximumScale)
             throw new QuietException(ErrorCode.InvalidSettings);
     }
 

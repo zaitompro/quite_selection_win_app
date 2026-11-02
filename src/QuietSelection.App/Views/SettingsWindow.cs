@@ -20,7 +20,7 @@ namespace QuietSelection.App.Views;
 internal sealed partial class SettingsWindow : Window
 {
     private static readonly (string Glyph, string Title)[] Sections =
-        [("\uE80F", "Общие"), ("\uE767", "Речь"), ("\uE774", "Перевод"), ("\uE765", "Сочетания клавиш"), ("\uE7A8", "Чтение с экрана")];
+        [("\uE80F", "Общие"), ("\uE767", "Речь"), ("\uE774", "Перевод"), ("\uE765", "Сочетания клавиш"), ("\uE7A8", "Чтение с экрана"), ("\uE71E", "Лупа")];
 
     private readonly AppShell shell;
     private readonly ListBox navigation = new() { BorderThickness = new(0), Background = Brushes.Transparent };
@@ -150,6 +150,7 @@ internal sealed partial class SettingsWindow : Window
             case 2: Translation(); break;
             case 3: Shortcuts(); break;
             case 4: Ocr(); break;
+            case 5: MagnifierPage(); break;
         }
         foreach (var update in updaters) update();
         scroll.ScrollToVerticalOffset(offset);
@@ -507,7 +508,10 @@ internal sealed partial class SettingsWindow : Window
         ReadingCommand.Selection => "Прочитать выделенное",
         ReadingCommand.PrimaryVoice => "Прочитать основным голосом",
         ReadingCommand.Region => "Распознать и прочитать область",
-        _ => "Перевести и прочитать"
+        ReadingCommand.Translate => "Перевести и прочитать",
+        ReadingCommand.ToggleMagnifier => "Лупа: включить или выключить",
+        ReadingCommand.InvertColors => "Лупа: негатив",
+        _ => "Лупа: следовать за кареткой"
     };
 
     private static string CommandDescription(ReadingCommand command) => command switch
@@ -515,12 +519,16 @@ internal sealed partial class SettingsWindow : Window
         ReadingCommand.Selection => "Читает выделенный текст; вставки на других языках — их голосами.",
         ReadingCommand.PrimaryVoice => "Читает всё выделенное одним основным голосом.",
         ReadingCommand.Region => "Обведите область экрана — текст будет распознан и прочитан.",
-        _ => "Переводит выделенное на основной язык и читает перевод."
+        ReadingCommand.Translate => "Переводит выделенное на основной язык и читает перевод.",
+        ReadingCommand.ToggleMagnifier => "Возвращает обычный масштаб или последнее увеличение.",
+        ReadingCommand.InvertColors => "Инвертирует цвета всего экрана.",
+        _ => "Включает или выключает слежение за текстовым курсором при наборе."
     };
 
     private static string CommandGlyph(ReadingCommand command) => command switch
     {
-        ReadingCommand.Selection => "\uE8D2", ReadingCommand.PrimaryVoice => "\uE767", ReadingCommand.Region => "\uE7A8", _ => "\uE774"
+        ReadingCommand.Selection => "\uE8D2", ReadingCommand.PrimaryVoice => "\uE767", ReadingCommand.Region => "\uE7A8", ReadingCommand.Translate => "\uE774",
+        ReadingCommand.ToggleMagnifier => "\uE71E", ReadingCommand.InvertColors => "\uE790", _ => "\uE8AC"
     };
 
     private readonly Dictionary<ReadingCommand, Button> shortcutButtons = [];
@@ -611,5 +619,61 @@ internal sealed partial class SettingsWindow : Window
         var privacy = Ui.Secondary("Захватывается только обведённая область. Изображение хранится в памяти на время распознавания.");
         privacy.Margin = new(4, 8, 0, 0);
         Add(privacy);
+    }
+
+    // ---- Magnifier ------------------------------------------------------------------------
+
+    private static readonly (double Step, string Label)[] ZoomSteps = [(1.1, "Плавный (×1,1)"), (1.25, "Обычный (×1,25)"), (1.5, "Крупный (×1,5)")];
+
+    private void MagnifierPage()
+    {
+        var options = shell.Settings.Magnifier;
+        Add(Ui.PageTitle("Лупа"));
+        Add(Ui.SettingRow("\uE71E", "Лупа", "Увеличение всего экрана. Указатель остаётся в центре; клик попадает туда, где нарисован указатель.",
+            Ui.Toggle(options.Enabled, value => { options.Enabled = value; shell.Save(); RenderPage(keepPosition: true); }, "Лупа")));
+        if (!options.Enabled)
+        {
+            var hint = Ui.Secondary("Включите лупу, чтобы увеличивать экран колесом мыши с зажатыми клавишами.");
+            hint.Margin = new(4, 8, 0, 0); Add(hint);
+            return;
+        }
+
+        // Current zoom with a quick on/off, updated live while the wheel turns.
+        var zoomText = new TextBlock { VerticalAlignment = VerticalAlignment.Center, Margin = new(0, 0, 12, 0), MinWidth = 60 };
+        var toggle = Ui.Button("", shell.ToggleMagnifier, automationName: "Включить или выключить увеличение");
+        var zoomControls = new StackPanel { Orientation = Orientation.Horizontal };
+        zoomControls.Children.Add(zoomText); zoomControls.Children.Add(toggle);
+        Add(Ui.SettingRow("\uE8A3", "Масштаб", "Колесо мыши с зажатыми клавишами меняет масштаб от 100 до 1600 %.", zoomControls));
+        updaters.Add(() =>
+        {
+            double scale = shell.MagnifierScale;
+            zoomText.Text = Math.Round(scale * 100) + " %";
+            toggle.Content = scale > 1 ? "Обычный масштаб" : "Увеличить до " + Math.Round(options.LastScale * 100) + " %";
+        });
+
+        var modifier = new ComboBox { ItemsSource = MagnifierSettings.Modifiers.Select(x => x + " + колесо").ToArray(), SelectedIndex = Math.Max(0, MagnifierSettings.Modifiers.ToList().IndexOf(options.Modifier)), MinWidth = 180 };
+        modifier.SelectionChanged += (_, _) => { options.Modifier = MagnifierSettings.Modifiers[modifier.SelectedIndex]; shell.Save(); };
+        Add(Ui.SettingRow("\uE962", "Клавиши для масштаба", "Пока они зажаты, колесо меняет масштаб, а не прокручивает окно.", modifier));
+
+        var step = new ComboBox { ItemsSource = ZoomSteps.Select(x => x.Label).ToArray(), MinWidth = 180,
+            SelectedIndex = Math.Max(0, Array.FindIndex(ZoomSteps, x => Math.Abs(x.Step - options.Step) < 0.01)) };
+        step.SelectionChanged += (_, _) => { options.Step = ZoomSteps[step.SelectedIndex].Step; shell.Save(); };
+        Add(Ui.SettingRow("\uE9E9", "Шаг масштаба", "Насколько меняется увеличение за один щелчок колеса.", step));
+
+        Add(Ui.Section("Цвета и слежение"));
+        Add(Ui.SettingRow("\uE790", "Негатив", "Инвертирует цвета всего экрана. Работает и без увеличения.",
+            Ui.Toggle(options.Invert, shell.SetMagnifierInvert, "Негатив")));
+        Add(Ui.SettingRow("\uE8AC", "Следовать за кареткой", "Во время набора текста увеличенная область сдвигается за текстовым курсором. Движение мыши возвращает слежение за указателем.",
+            Ui.Toggle(options.FollowCaret, shell.SetMagnifierFollowCaret, "Следовать за кареткой")));
+        Add(Ui.SettingRow("\uE7B3", "Скрывать указатель при наборе", "Указатель не закрывает каретку; появляется снова при движении мыши.",
+            Ui.Toggle(options.HideCursorWhileTyping, value => { options.HideCursorWhileTyping = value; shell.Save(); }, "Скрывать указатель при наборе")));
+
+        Add(Ui.Section("Сочетания клавиш"));
+        var assigned = new[] { ReadingCommand.ToggleMagnifier, ReadingCommand.InvertColors, ReadingCommand.FollowCaret }
+            .Select(c => CommandTitle(c) + ": " + (shell.Settings.Hotkeys.GetValueOrDefault(c, "") is { Length: > 0 } chord ? chord : "не назначено"));
+        Add(Ui.SettingRow("\uE765", "Быстрые команды", string.Join("\n", assigned), Ui.Button("Назначить…", () => OpenSection(3))));
+        var note = Ui.Secondary("Не включайте одновременно экранную лупу Windows. В окнах, запущенных от имени администратора, колесо и каретка не отслеживаются.");
+        note.Margin = new(4, 8, 0, 0);
+        Add(note);
     }
 }

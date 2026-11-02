@@ -18,6 +18,8 @@ internal static class ThemeChecks
             var russian = new[] { shell.Settings.Primary }.Concat(shell.Settings.Additional).FirstOrDefault(x => x.Language == "ru");
             if (russian is not null) russian.VoiceId = russianVoice;
         }
+        // In memory only (never saved; the magnifier service is not started): render its full section.
+        shell.Settings.Magnifier.Enabled = true;
         var settings = new SettingsWindow(shell) { ShowActivated = false };
         settings.Show();
         var backgrounds = new Color[2];
@@ -32,7 +34,7 @@ internal static class ThemeChecks
                 await settings.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
                 backgrounds[i] = (settings.Background as SolidColorBrush)?.Color ?? Colors.Transparent;
                 foregrounds[i] = (settings.Foreground as SolidColorBrush)?.Color ?? Colors.Transparent;
-                for (int section = 0; section < 5; section++)
+                for (int section = 0; section < 6; section++)
                 {
                     settings.OpenSection(section);
                     await settings.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
@@ -73,7 +75,7 @@ internal static class ThemeChecks
             {
                 light = new { background = backgrounds[0].ToString(), foreground = foregrounds[0].ToString(), contrast = lightContrast },
                 dark = new { background = backgrounds[1].ToString(), foreground = foregrounds[1].ToString(), contrast = darkContrast },
-                sectionsRendered = 5, desktopCaptured = false
+                sectionsRendered = 6, desktopCaptured = false
             }));
             // Fluent deliberately uses partially transparent text brushes. Validate the resulting
             // contrast, rather than rejecting its documented alpha values as an error.

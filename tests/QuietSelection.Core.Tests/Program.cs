@@ -226,6 +226,57 @@ Test("voice.exact_id_and_speed", () =>
 Test("voice.missing_is_error", () => Error(ErrorCode.VoiceMissing, () => LanguagePlanner.Plan("Hello world", Config(), false, [])));
 Test("voice.language_mismatch_is_error", () => Error(ErrorCode.VoiceMissing, () => LanguagePlanner.Plan("Hello world", Config(), false, [new("en-fixed", "wrong", "ru-RU")])));
 Test("voice.rate_boundaries", () => Check(LanguagePlanner.SpeakingRate(0) == 0.5 && LanguagePlanner.SpeakingRate(50) == 1 && LanguagePlanner.SpeakingRate(100) == 6));
+Test("magnifier.cursor_stays_centered_and_maps_back", () =>
+{
+    var screen = new MagPoint(1920, 1080);
+    foreach (double scale in new[] { 1.5, 2.0, 3.0, 7.25 })
+    {
+        var cursor = new MagPoint(960.4, 540.7);
+        var offset = MagnifierMath.Center(cursor, screen, scale);
+        var shown = MagnifierMath.ToScreen(cursor, offset, scale);
+        Check(Math.Abs(shown.X - 960) < 0.01 && Math.Abs(shown.Y - 540) < 0.01);
+        // Away from the edges any cursor appears exactly in the middle.
+        var other = new MagPoint(1000, 600);
+        var shownOther = MagnifierMath.ToScreen(other, MagnifierMath.Center(other, screen, scale), scale);
+        Check(Math.Abs(shownOther.X - 960) < 0.01 && Math.Abs(shownOther.Y - 540) < 0.01);
+    }
+});
+Test("magnifier.edges_clamp_and_keep_cursor_visible", () =>
+{
+    var screen = new MagPoint(1920, 1080);
+    var corner = MagnifierMath.Center(new(5, 5), screen, 2);
+    Check(corner == new MagPoint(0, 0));
+    var far = MagnifierMath.Center(new(1915, 1075), screen, 2);
+    Check(far == new MagPoint(960, 540));
+    var shown = MagnifierMath.ToScreen(new(1915, 1075), far, 2);
+    Check(shown.X is > 0 and < 1920 && shown.Y is > 0 and < 1080);
+});
+Test("magnifier.wheel_scale_bounds", () =>
+{
+    Check(MagnifierMath.NextScale(1.0, 1, 1.25) == 1.25);
+    Check(MagnifierMath.NextScale(1.25, -1, 1.25) == 1.0);
+    Check(MagnifierMath.NextScale(1.1, -3, 1.25) == 1.0);
+    Check(MagnifierMath.NextScale(15, 5, 1.25) == MagnifierMath.MaximumScale);
+});
+Test("magnifier.caret_moves_view_only_outside_center", () =>
+{
+    var screen = new MagPoint(1920, 1080);
+    var offset = new MagPoint(400, 200); // 960 x 540 visible at 2x
+    var inside = MagnifierMath.FollowCaret(offset, new(880, 470, 2, 20), screen, 2);
+    Check(inside == offset);
+    var right = MagnifierMath.FollowCaret(offset, new(1200, 470, 2, 20), screen, 2);
+    Check(right.Y == offset.Y && right.X > offset.X && 1202 <= right.X + 960 * 0.75 + 0.01);
+    var away = MagnifierMath.FollowCaret(offset, new(100, 1000, 2, 20), screen, 2);
+    Check(away == MagnifierMath.Center(new(101, 1010), screen, 2));
+});
+Test("magnifier.settings_default_and_validation", () =>
+{
+    var legacy = System.Text.Json.JsonSerializer.Deserialize<AppSettings>("{\"SchemaVersion\":1}")!;
+    legacy.Validate();
+    Check(!legacy.Magnifier.Enabled && legacy.Magnifier.Modifier == "Ctrl+Alt" && legacy.Magnifier.FollowCaret);
+    var settings = Config(); settings.Magnifier.Modifier = "Win"; Error(ErrorCode.InvalidSettings, settings.Validate);
+    settings = Config(); settings.Magnifier.Step = 5; Error(ErrorCode.InvalidSettings, settings.Validate);
+});
 Test("settings.snapshot_is_independent", () => { var original = Config(); var snapshot = original.Snapshot(); original.Primary.Speed = 99; Check(snapshot.Primary.Speed == 40); });
 Test("settings.reject_duplicate_language", () => { var settings = Config(); settings.Additional.Add(new() { Language = "ru" }); Error(ErrorCode.InvalidSettings, settings.Validate); });
 Test("settings.reject_future_schema", () => { var settings = Config(); settings.SchemaVersion = 2; Error(ErrorCode.InvalidSettings, settings.Validate); });

@@ -142,10 +142,11 @@ internal sealed partial class AppShell : IDisposable
     {
         if (!ownsMutex) { application.Shutdown(); return; }
         running = true;
-        hotkeys = new(); hotkeys.Invoked += command => _ = ReadAsync(command);
+        hotkeys = new(); hotkeys.Invoked += RunCommand;
         foreach (var binding in Settings.Hotkeys)
             if (!hotkeys.Set(binding.Key, binding.Value)) Status = "Не удалось зарегистрировать сочетание " + binding.Value;
         tray = new TrayIcon(ShowSettings, Stop, Exit);
+        ApplyMagnifier();
         await RefreshStartupAsync();
         if (!inTray) ShowSettings();
         await RefreshVoicesAsync();
@@ -183,6 +184,7 @@ internal sealed partial class AppShell : IDisposable
         try { store.Save(Settings); }
         catch { SetStatus("Не удалось сохранить настройки."); }
         UpdateResidentVoices();
+        ApplyMagnifier();
     }
 
     /// <summary>Moves an unreadable settings file aside and starts from defaults.</summary>
@@ -255,7 +257,7 @@ internal sealed partial class AppShell : IDisposable
     private async Task ExitAsync()
     {
         if (exiting) return;
-        exiting = true; operations.Stop(); modelPreparation?.Cancel(); voiceDownload?.Cancel();
+        exiting = true; StopMagnifier(); SaveQuietly(); operations.Stop(); modelPreparation?.Cancel(); voiceDownload?.Cancel();
         foreach (var set in ResidentVoiceSets) set.Cancel();
         try
         {
@@ -508,6 +510,7 @@ internal sealed partial class AppShell : IDisposable
 
     public void Dispose()
     {
+        StopMagnifier();
         operations.Stop(); modelPreparation?.Cancel(); voiceDownload?.Cancel();
         foreach (var set in ResidentVoiceSets) set.Cancel();
         worker.Dispose(); translator.Dispose(); tray?.Dispose(); indicator?.Close(); hotkeys?.Dispose(); openSettings?.Dispose();

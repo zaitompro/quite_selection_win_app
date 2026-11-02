@@ -1,6 +1,7 @@
 namespace QuietSelection.Core;
 
-public enum ReadingCommand { Selection, PrimaryVoice, Region, Translate }
+/// <summary>Commands that can have a global shortcut: reading commands and magnifier controls.</summary>
+public enum ReadingCommand { Selection, PrimaryVoice, Region, Translate, ToggleMagnifier, InvertColors, FollowCaret }
 public enum OperationState { Idle, ReadingSelection, SelectingRegion, Recognizing, Translating, Speaking }
 public enum ErrorCode
 {
