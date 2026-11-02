@@ -26,22 +26,22 @@ internal static class WorkerProtocol
         try
         {
             if (bytes.Length > MaximumMessageBytes) throw new QuietException(ErrorCode.TooLong);
-            await stream.WriteAsync(BitConverter.GetBytes(bytes.Length), token);
-            await stream.WriteAsync(bytes, token);
-            await stream.FlushAsync(token);
+            await stream.WriteAsync(BitConverter.GetBytes(bytes.Length), token).ConfigureAwait(false);
+            await stream.WriteAsync(bytes, token).ConfigureAwait(false);
+            await stream.FlushAsync(token).ConfigureAwait(false);
         }
         finally { Array.Clear(bytes); }
     }
     internal static async Task<T> ReadAsync<T>(Stream stream, CancellationToken token)
     {
         var lengthBytes = new byte[4];
-        await stream.ReadExactlyAsync(lengthBytes, token);
+        await stream.ReadExactlyAsync(lengthBytes, token).ConfigureAwait(false);
         var length = BitConverter.ToInt32(lengthBytes);
         if (length is <= 0 or > MaximumMessageBytes) throw new QuietException(ErrorCode.WorkerFailure);
         var bytes = new byte[length];
         try
         {
-            await stream.ReadExactlyAsync(bytes, token);
+            await stream.ReadExactlyAsync(bytes, token).ConfigureAwait(false);
             return JsonSerializer.Deserialize<T>(bytes) ?? throw new QuietException(ErrorCode.WorkerFailure);
         }
         finally { Array.Clear(bytes); }
