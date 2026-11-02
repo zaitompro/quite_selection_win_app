@@ -219,6 +219,9 @@ internal sealed partial class SettingsWindow : Window
         Add(Ui.SettingRow("\uE823", "Запускать при входе в Windows", StartupDescription(), StartupToggle()));
         Add(Ui.SettingRow("\uE7B3", "Индикатор чтения", "Небольшая плашка с кнопкой «Стоп» в углу экрана во время чтения и перевода.",
             Ui.Toggle(shell.Settings.ShowReadingIndicator, value => { shell.Settings.ShowReadingIndicator = value; shell.Save(); }, "Индикатор чтения")));
+        Add(Ui.SettingRow("\uE9D9", "Журнал захвата выделения",
+            "Записывает на этом компьютере, в каких программах и на каком шаге не удалось получить выделение. Сам текст не записывается. Файл: " + Selection.SelectionDiagnostics.LogPath,
+            Ui.Toggle(shell.Settings.SelectionDiagnostics, value => { shell.Settings.SelectionDiagnostics = value; shell.Save(); }, "Журнал захвата выделения")));
         Add(Ui.SettingRow("\uE7E8", "Завершить работу", "Закрытие окна оставляет QuietSelection в области уведомлений.",
             Ui.Button("Завершить", shell.Exit, automationName: "Завершить QuietSelection")));
     }

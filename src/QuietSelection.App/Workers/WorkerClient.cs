@@ -200,7 +200,10 @@ internal sealed class WorkerClient(IReadOnlyDictionary<Speech.SpeechEngine, stri
     {
         if (request.Kind == "selection")
         {
-            var result = await selection.ReadAsync(request, timeout, token);
+            WorkerResponse result;
+            try { result = await selection.ReadAsync(request, timeout, token); }
+            catch (QuietException ex) { Selection.SelectionDiagnostics.Record(request.SourceWindow, ex.Code, "helper"); throw; }
+            Selection.SelectionDiagnostics.Record(request.SourceWindow, result.Error, result.Diagnostic);
             if (result.Error != ErrorCode.None) throw new QuietException(result.Error);
             return result;
         }

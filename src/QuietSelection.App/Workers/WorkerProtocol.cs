@@ -13,7 +13,7 @@ internal sealed record WorkerResponse(ErrorCode Error = ErrorCode.None, string T
     bool CacheHit = false, int ProcessId = 0, int RetainedModels = 0,
     double ClientFirstAudioMilliseconds = 0, double ClientElapsedMilliseconds = 0,
     double PlaybackUnderrunMilliseconds = 0, double MaxPlaybackUnderrunMilliseconds = 0,
-    byte[]? AudioData = null);
+    byte[]? AudioData = null, string Diagnostic = "");
 
 internal static class WorkerProtocol
 {

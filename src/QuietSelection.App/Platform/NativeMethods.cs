@@ -44,6 +44,9 @@ internal static class NativeMethods
     internal static extern int qs_recognize(nint pixels, int width, int height, string language, out nint text);
     [DllImport("QuietSelection.Native.dll", CallingConvention = CallingConvention.Cdecl)]
     internal static extern void qs_free(nint data);
+    // Returns a status (0 = text found); see SelectionUia.cpp. Both strings are freed with qs_free.
+    [DllImport("QuietSelection.Native.dll", CallingConvention = CallingConvention.Cdecl)]
+    internal static extern int qs_read_selection(nint source, uint maximum, out nint text, out nint diagnostic);
 
     internal static string TakeString(nint pointer)
     {

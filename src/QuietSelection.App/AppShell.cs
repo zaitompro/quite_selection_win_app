@@ -148,6 +148,7 @@ internal sealed partial class AppShell : IDisposable
         tray = new TrayIcon(ShowSettings, Stop, Exit);
         ApplyMagnifier();
         _ = ApplyWindowThemeAsync();
+        Selection.SelectionDiagnostics.Enabled = Settings.SelectionDiagnostics;
         await RefreshStartupAsync();
         if (!inTray) ShowSettings();
         await RefreshVoicesAsync();
@@ -187,6 +188,7 @@ internal sealed partial class AppShell : IDisposable
         UpdateResidentVoices();
         ApplyMagnifier();
         _ = ApplyWindowThemeAsync();
+        Selection.SelectionDiagnostics.Enabled = Settings.SelectionDiagnostics;
     }
 
     /// <summary>Moves an unreadable settings file aside and starts from defaults.</summary>

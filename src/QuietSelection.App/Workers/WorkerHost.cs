@@ -28,9 +28,12 @@ internal static class WorkerHost
         WorkerResponse response;
         try
         {
-            response = request.Kind == "selection"
-                ? new(Text: SelectionReader.Read((nint)request.SourceWindow), ProcessId: Environment.ProcessId)
-                : new(ErrorCode.WorkerFailure);
+            if (request.Kind == "selection")
+            {
+                var selection = SelectionReader.Read((nint)request.SourceWindow);
+                response = new(selection.Error, selection.Text, ProcessId: Environment.ProcessId, Diagnostic: selection.Diagnostic);
+            }
+            else response = new(ErrorCode.WorkerFailure);
         }
         catch (QuietException ex) { response = new(ex.Code, ProcessId: Environment.ProcessId); }
         catch { response = new(ErrorCode.ProviderFailure, ProcessId: Environment.ProcessId); }
@@ -81,7 +84,10 @@ internal static class WorkerHost
     {
         switch (request.Kind)
         {
-            case "selection": return new(Text: SelectionReader.Read((nint)request.SourceWindow));
+            case "selection":
+                var selection = SelectionReader.Read((nint)request.SourceWindow);
+                if (selection.Error != ErrorCode.None) throw new QuietException(selection.Error);
+                return new(Text: selection.Text, Diagnostic: selection.Diagnostic);
             case "voices":
                 NativeMethods.Check(NativeMethods.qs_voices(out var voicesPointer), ErrorCode.SpeechFailure);
                 var voices = NativeMethods.TakeString(voicesPointer).Split('\n', StringSplitOptions.RemoveEmptyEntries)

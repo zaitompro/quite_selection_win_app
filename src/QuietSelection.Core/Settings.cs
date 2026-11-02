@@ -24,6 +24,8 @@ public sealed class AppSettings
     public Dictionary<ReadingCommand, string> Hotkeys { get; set; } = [];
     public bool StartAtLogin { get; set; }
     public bool ShowReadingIndicator { get; set; } = true;
+    /// <summary>Local log of how selections were found (program names, never text). Off by default.</summary>
+    public bool SelectionDiagnostics { get; set; }
     public MagnifierSettings Magnifier { get; set; } = new();
     public WindowThemeSettings WindowTheme { get; set; } = new();
     public string OcrLanguage { get; set; } = "ru";
