@@ -643,7 +643,7 @@ internal sealed partial class SettingsWindow : Window
         var toggle = Ui.Button("", shell.ToggleMagnifier, automationName: "Включить или выключить увеличение");
         var zoomControls = new StackPanel { Orientation = Orientation.Horizontal };
         zoomControls.Children.Add(zoomText); zoomControls.Children.Add(toggle);
-        Add(Ui.SettingRow("\uE8A3", "Масштаб", "Колесо мыши с зажатыми клавишами меняет масштаб от 100 до 1600 %.", zoomControls));
+        Add(Ui.SettingRow("\uE8A3", "Масштаб", "Колесо мыши с зажатыми клавишами меняет масштаб от 100 до 6400 %. Последний уровень запоминается.", zoomControls));
         updaters.Add(() =>
         {
             double scale = shell.MagnifierScale;
@@ -654,6 +654,15 @@ internal sealed partial class SettingsWindow : Window
         var modifier = new ComboBox { ItemsSource = MagnifierSettings.Modifiers.Select(x => x + " + колесо").ToArray(), SelectedIndex = Math.Max(0, MagnifierSettings.Modifiers.ToList().IndexOf(options.Modifier)), MinWidth = 180 };
         modifier.SelectionChanged += (_, _) => { options.Modifier = MagnifierSettings.Modifiers[modifier.SelectedIndex]; shell.Save(); };
         Add(Ui.SettingRow("\uE962", "Клавиши для масштаба", "Пока они зажаты, колесо меняет масштаб, а не прокручивает окно.", modifier));
+
+        string[] middleLabels = ["Не использовать", options.Modifier + " + средняя кнопка", "Средняя кнопка без клавиш"];
+        var middle = new ComboBox { ItemsSource = middleLabels, MinWidth = 220,
+            SelectedIndex = Math.Max(0, MagnifierSettings.MiddleClickModes.ToList().IndexOf(options.MiddleClick)) };
+        middle.SelectionChanged += (_, _) => { options.MiddleClick = MagnifierSettings.MiddleClickModes[middle.SelectedIndex]; shell.Save(); RenderPage(keepPosition: true); };
+        Add(Ui.SettingRow("\uE962", "Включение щелчком колеса",
+            options.MiddleClick == "Alone"
+                ? "Щелчок колесом включает и выключает увеличение. В программах он больше не работает: например, ссылка в новой вкладке или закрытие вкладки в браузере. С Ctrl, Alt или Shift щелчок проходит в программу как обычно."
+                : "Щелчок средней кнопкой (колесом) включает увеличение на последнем уровне и выключает его.", middle));
 
         var step = new ComboBox { ItemsSource = ZoomSteps.Select(x => x.Label).ToArray(), MinWidth = 180,
             SelectedIndex = Math.Max(0, Array.FindIndex(ZoomSteps, x => Math.Abs(x.Step - options.Step) < 0.01)) };

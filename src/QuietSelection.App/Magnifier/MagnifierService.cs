@@ -17,7 +17,7 @@ namespace QuietSelection.App.Magnifier;
 /// </summary>
 internal sealed class MagnifierService : IDisposable
 {
-    private const int WmQuit = 0x0012, WmMask = 0x8001, WmMouseWheel = 0x020A, MouseLowLevel = 14;
+    private const int WmQuit = 0x0012, WmMask = 0x8001, WmMouseWheel = 0x020A, WmMiddleDown = 0x0207, WmMiddleUp = 0x0208, MouseLowLevel = 14;
     private const int CaretObject = -8;
     private const uint EventShow = 0x8002, EventLocationChange = 0x800B;
     private static readonly HashSet<string> ShellProcesses = new(StringComparer.OrdinalIgnoreCase)
@@ -32,6 +32,7 @@ internal sealed class MagnifierService : IDisposable
     private MagRect? caret;
     private long caretVersion;
     private int wheelRemainder;
+    private bool middleSwallowed; // The matching button-up is swallowed too.
     private volatile bool stopping;
     private Thread? render, mouse, caretThread;
     private uint mouseThreadId, caretThreadId;
@@ -68,7 +69,8 @@ internal sealed class MagnifierService : IDisposable
             options = new MagnifierSettings
             {
                 Enabled = settings.Enabled, Modifier = settings.Modifier, Step = settings.Step, LastScale = settings.LastScale,
-                Invert = settings.Invert, FollowCaret = settings.FollowCaret, HideCursorWhileTyping = settings.HideCursorWhileTyping
+                Invert = settings.Invert, FollowCaret = settings.FollowCaret, HideCursorWhileTyping = settings.HideCursorWhileTyping,
+                MiddleClick = settings.MiddleClick
             };
             invert = settings.Invert;
             lastScale = Math.Max(1.25, settings.LastScale);
@@ -199,7 +201,32 @@ internal sealed class MagnifierService : IDisposable
                 return 1; // The app under the pointer does not scroll.
             }
         }
+        else if (code >= 0 && wParam == WmMiddleDown)
+        {
+            string modifier, middle; bool enabled;
+            lock (gate) { modifier = options.Modifier; middle = options.MiddleClick; enabled = options.Enabled; }
+            bool match = enabled && middle switch { "Alone" => NoModifierHeld(), "Modifier" => ModifierHeld(modifier), _ => false };
+            if (match)
+            {
+                middleSwallowed = true;
+                Toggle(); // Back to 1x, or to the remembered zoom.
+                if (middle == "Modifier" && modifier is "Alt" or "Shift+Alt") PostThreadMessage(mouseThreadId, WmMask, 0, 0);
+                return 1;
+            }
+        }
+        else if (code >= 0 && wParam == WmMiddleUp && middleSwallowed)
+        {
+            middleSwallowed = false;
+            return 1;
+        }
         return CallNextHookEx(0, code, wParam, lParam);
+    }
+
+    // A plain middle click: with Ctrl, Alt, Shift or Win it still reaches the app (for example Ctrl+click).
+    private static bool NoModifierHeld()
+    {
+        static bool Down(int key) => (GetAsyncKeyState(key) & 0x8000) != 0;
+        return !Down(0x11) && !Down(0x12) && !Down(0x10) && !Down(0x5B) && !Down(0x5C);
     }
 
     private static bool ModifierHeld(string modifier)

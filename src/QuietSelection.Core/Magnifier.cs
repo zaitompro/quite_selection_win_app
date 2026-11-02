@@ -4,6 +4,8 @@ namespace QuietSelection.Core;
 public sealed class MagnifierSettings
 {
     public static readonly IReadOnlyList<string> Modifiers = ["Ctrl+Alt", "Alt", "Shift+Alt", "Ctrl+Shift"];
+    /// <summary>Middle button toggles zoom: off, with the zoom modifier held, or a plain middle click.</summary>
+    public static readonly IReadOnlyList<string> MiddleClickModes = ["Off", "Modifier", "Alone"];
     public bool Enabled { get; set; }
     /// <summary>Keys held while turning the wheel to zoom.</summary>
     public string Modifier { get; set; } = "Ctrl+Alt";
@@ -14,6 +16,7 @@ public sealed class MagnifierSettings
     public bool Invert { get; set; }
     public bool FollowCaret { get; set; } = true;
     public bool HideCursorWhileTyping { get; set; } = true;
+    public string MiddleClick { get; set; } = "Off";
 }
 
 public readonly record struct MagPoint(double X, double Y);
@@ -30,7 +33,8 @@ public readonly record struct MagRect(double X, double Y, double Width, double H
 /// </summary>
 public static class MagnifierMath
 {
-    public const double MaximumScale = 16.0;
+    // Windows Magnifier stops at 16x (1600 %); the API itself accepts at least 64x.
+    public const double MaximumScale = 64.0;
 
     public static double NextScale(double current, int notches, double step)
     {

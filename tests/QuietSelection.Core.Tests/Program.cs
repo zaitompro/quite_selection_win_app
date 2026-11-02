@@ -256,7 +256,8 @@ Test("magnifier.wheel_scale_bounds", () =>
     Check(MagnifierMath.NextScale(1.0, 1, 1.25) == 1.25);
     Check(MagnifierMath.NextScale(1.25, -1, 1.25) == 1.0);
     Check(MagnifierMath.NextScale(1.1, -3, 1.25) == 1.0);
-    Check(MagnifierMath.NextScale(15, 5, 1.25) == MagnifierMath.MaximumScale);
+    Check(MagnifierMath.NextScale(50, 5, 1.25) == MagnifierMath.MaximumScale);
+    Check(MagnifierMath.MaximumScale > 16 && MagnifierMath.NextScale(32, 1, 1.5) == 48 && MagnifierMath.NextScale(60, 1, 1.25) == 64);
 });
 Test("magnifier.caret_moves_view_only_outside_center", () =>
 {
@@ -276,6 +277,8 @@ Test("magnifier.settings_default_and_validation", () =>
     Check(!legacy.Magnifier.Enabled && legacy.Magnifier.Modifier == "Ctrl+Alt" && legacy.Magnifier.FollowCaret);
     var settings = Config(); settings.Magnifier.Modifier = "Win"; Error(ErrorCode.InvalidSettings, settings.Validate);
     settings = Config(); settings.Magnifier.Step = 5; Error(ErrorCode.InvalidSettings, settings.Validate);
+    Check(legacy.Magnifier.MiddleClick == "Off");
+    settings = Config(); settings.Magnifier.MiddleClick = "Always"; Error(ErrorCode.InvalidSettings, settings.Validate);
 });
 Test("settings.snapshot_is_independent", () => { var original = Config(); var snapshot = original.Snapshot(); original.Primary.Speed = 99; Check(snapshot.Primary.Speed == 40); });
 Test("settings.reject_duplicate_language", () => { var settings = Config(); settings.Additional.Add(new() { Language = "ru" }); Error(ErrorCode.InvalidSettings, settings.Validate); });

@@ -43,7 +43,8 @@ public sealed class AppSettings
             Hotkeys.Values.Where(x => x.Length > 0).Distinct().Count() != Hotkeys.Values.Count(x => x.Length > 0))
             throw new QuietException(ErrorCode.InvalidSettings);
         if (Magnifier is null || !MagnifierSettings.Modifiers.Contains(Magnifier.Modifier) ||
-            Magnifier.Step is < 1.05 or > 2.0 || Magnifier.LastScale is < 1.0 or > MagnifierMath.MaximumScale)
+            Magnifier.Step is < 1.05 or > 2.0 || Magnifier.LastScale is < 1.0 or > MagnifierMath.MaximumScale ||
+            !MagnifierSettings.MiddleClickModes.Contains(Magnifier.MiddleClick))
             throw new QuietException(ErrorCode.InvalidSettings);
     }
 
