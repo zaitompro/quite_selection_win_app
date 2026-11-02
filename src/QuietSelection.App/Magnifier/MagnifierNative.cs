@@ -40,9 +40,9 @@ internal static class MagnifierNative
         [FieldOffset(24)] internal nuint Extra;
     }
 
-    [DllImport("magnification.dll")] internal static extern bool MagInitialize();
+    [DllImport("magnification.dll", SetLastError = true)] internal static extern bool MagInitialize();
     [DllImport("magnification.dll")] internal static extern bool MagUninitialize();
-    [DllImport("magnification.dll")] internal static extern bool MagSetFullscreenTransform(float level, int x, int y);
+    [DllImport("magnification.dll", SetLastError = true)] internal static extern bool MagSetFullscreenTransform(float level, int x, int y);
     [DllImport("magnification.dll")] internal static extern bool MagGetFullscreenTransform(out float level, out int x, out int y);
     [DllImport("magnification.dll")] internal static extern bool MagSetFullscreenColorEffect(ref ColorEffect effect);
     [DllImport("magnification.dll")] internal static extern bool MagShowSystemCursor(bool show);

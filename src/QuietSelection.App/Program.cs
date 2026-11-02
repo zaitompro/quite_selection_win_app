@@ -13,6 +13,7 @@ internal static class Program
         if (args.Length == 2 && args[0] == "--selection-worker") return WorkerHost.RunSelection(args[1]);
         if (args.Length == 2 && args[0] == "--native-speech-worker") return WorkerHost.RunNativeSpeech(args[1]);
         if (args.Length == 1 && args[0] == "--magnifier-crash-probe") return Magnifier.MagnifierChecks.CrashProbe();
+        if (args.Length == 1 && args[0] == "--magnifier-read") return Magnifier.MagnifierChecks.ReadProbe();
         int exitCode = 0;
         // WinRT activation info must be read on this MTA thread, not the WPF STA thread.
         bool launchedAtSignIn = args.Length == 0 && Platform.StartupTaskClient.LaunchedAtSignIn();

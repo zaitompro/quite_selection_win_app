@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
+using System.Runtime.InteropServices;
 using System.Windows.Interop;
 using static QuietSelection.App.Magnifier.MagnifierNative;
 
@@ -21,6 +22,16 @@ internal static class MagnifierChecks
         var field = new TextBox { Text = "Синтетический текст для проверки каретки.", Margin = new(24) };
         window.Content = field;
         window.Loaded += async (_, _) =>
+        {
+            try { await RunChecksAsync(); }
+            catch (Exception ex)
+            {
+                // Synthetic test only: the exception text holds no user data.
+                await File.WriteAllTextAsync(Path.Combine(directory, "magnifier-error.txt"), ex.ToString());
+                window.Close(); app.Shutdown(1);
+            }
+        };
+        async Task RunChecksAsync()
         {
             var checks = new List<object>(); bool failed = false;
             void Add(string id, bool passed, object? data = null) { checks.Add(new { id, passed, data }); failed |= !passed; }
@@ -51,35 +62,106 @@ internal static class MagnifierChecks
                 await Task.Delay(300);
                 service.Toggle(); // 1× → last zoom (2×)
                 await Task.Delay(900);
-                MagGetFullscreenTransform(out float level, out int x, out int y);
+                var (level, x, y) = await ReadScreenAsync();
                 GetCursorPos(out var cursor);
                 var expected = MagnifierMath.Center(new(cursor.X, cursor.Y), new(GetSystemMetrics(0), GetSystemMetrics(1)), 2);
                 Add("zoom.applied_2x_centered_on_pointer", Math.Abs(level - 2) < 0.01 && Math.Abs(x - expected.X) <= 1 && Math.Abs(y - expected.Y) <= 1,
                     new { level, x, y, expected, failure });
                 service.Toggle();
                 await Task.Delay(700);
-                MagGetFullscreenTransform(out level, out _, out _);
+                (level, _, _) = await ReadScreenAsync();
                 Add("zoom.toggle_back_to_1x", Math.Abs(level - 1) < 0.01, new { level });
                 service.Zoom(1);
                 await Task.Delay(500);
             }
-            MagGetFullscreenTransform(out float afterDispose, out _, out _);
+            GetCursorPos(out var userCursor); // Restored after the pointer checks.
+            using (var service = new MagnifierService())
+            {
+                service.Start(new MagnifierSettings { Enabled = true, FollowCaret = true, HideCursorWhileTyping = true, Modifier = "Ctrl+Alt" });
+                await Task.Delay(300);
+                // Ctrl+Alt + two wheel notches over the own window: zoom 1 → 1.5625, the box must not scroll.
+                SetCursorPos((int)((topLeft.X + bottomRight.X) / 2), (int)((topLeft.Y + bottomRight.Y) / 2));
+                double before = service.Scale;
+                SendKeys(0x11, 0x12); SendWheel(120); SendWheel(120); ReleaseKeys(0x12, 0x11);
+                await Task.Delay(800);
+                var (wheelLevel, _, _) = await ReadScreenAsync();
+                Add("wheel.ctrl_alt_zooms", before == 1 && Math.Abs(service.Scale - 1.5625) < 0.01 && Math.Abs(wheelLevel - 1.5625) < 0.02,
+                    new { before, after = service.Scale, wheelLevel });
+                SendWheel(120); // Without the modifier the wheel is untouched.
+                await Task.Delay(200);
+                Add("wheel.plain_wheel_not_captured", Math.Abs(service.Scale - 1.5625) < 0.01, new { scale = service.Scale });
+
+                // Caret: pointer in the top-left corner, then the caret moves in the centered box.
+                service.Zoom(1); // About 1.95x.
+                SetCursorPos(0, 0);
+                await Task.Delay(700);
+                var (_, cornerX, cornerY) = await ReadScreenAsync();
+                field.CaretIndex = field.Text.Length;
+                await Task.Delay(900);
+                var (caretLevel, caretX, caretY) = await ReadScreenAsync();
+                var caretRect = MagnifierService.CaretRectangle(handle);
+                var screen = new MagPoint(GetSystemMetrics(0), GetSystemMetrics(1));
+                bool caretVisible = caretRect is { } c && c.X >= caretX && c.Right <= caretX + screen.X / caretLevel && c.Y >= caretY && c.Bottom <= caretY + screen.Y / caretLevel;
+                Add("caret.view_moves_to_caret", cornerX == 0 && cornerY == 0 && (caretX > 0 || caretY > 0) && caretVisible,
+                    new { corner = new { cornerX, cornerY }, view = new { caretX, caretY, caretLevel }, caretRect });
+                // Moving the mouse returns to pointer following.
+                SetCursorPos(40, 40);
+                await Task.Delay(600);
+                var (backLevel, backX, backY) = await ReadScreenAsync();
+                var pointerView = MagnifierMath.Center(new(40, 40), screen, backLevel);
+                Add("caret.mouse_movement_returns_to_pointer", Math.Abs(backX - pointerView.X) <= 1 && Math.Abs(backY - pointerView.Y) <= 1, new { backX, backY, pointerView });
+            }
+            SetCursorPos(userCursor.X, userCursor.Y);
+            var (afterDispose, _, _) = await ReadScreenAsync();
             Add("zoom.dispose_restores_1x", Math.Abs(afterDispose - 1) < 0.01, new { level = afterDispose });
 
             // A magnifying process that dies must not leave the screen zoomed.
             using (var probe = Process.Start(new ProcessStartInfo(Environment.ProcessPath!, "--magnifier-crash-probe") { UseShellExecute = false, CreateNoWindow = true })!)
             {
                 await Task.Delay(1200);
-                MagGetFullscreenTransform(out float whileRunning, out _, out _);
+                var (whileRunning, _, _) = await ReadScreenAsync();
                 probe.Kill(); await probe.WaitForExitAsync();
                 await Task.Delay(700);
-                MagGetFullscreenTransform(out float afterKill, out _, out _);
+                var (afterKill, _, _) = await ReadScreenAsync();
                 Add("zoom.killed_process_restores_1x", Math.Abs(afterKill - 1) < 0.01, new { whileRunning, afterKill });
             }
             await File.WriteAllTextAsync(Path.Combine(directory, "magnifier.json"), JsonSerializer.Serialize(new { syntheticDataOnly = true, checks }, new JsonSerializerOptions { WriteIndented = true }));
             window.Close(); app.Shutdown(failed ? 1 : 0);
-        };
+        }
         app.Startup += (_, _) => window.Show();
+    }
+
+    private static void SendKeys(params ushort[] keys) => SendInput((uint)keys.Length, keys.Select(k => new KeyboardInput { Type = 1, Vk = k }).ToArray(), Marshal.SizeOf<KeyboardInput>());
+    private static void ReleaseKeys(params ushort[] keys) => SendInput((uint)keys.Length, keys.Select(k => new KeyboardInput { Type = 1, Vk = k, Flags = 2 }).ToArray(), Marshal.SizeOf<KeyboardInput>());
+    private static void SendWheel(int delta)
+    {
+        // INPUT with MOUSEINPUT on x64: mouseData at offset 16, dwFlags at 20 (MOUSEEVENTF_WHEEL).
+        var input = new byte[40];
+        BitConverter.GetBytes(0u).CopyTo(input, 0);
+        BitConverter.GetBytes(delta).CopyTo(input, 16);
+        BitConverter.GetBytes(0x0800u).CopyTo(input, 20);
+        SendRaw(1, input, 40);
+    }
+    [DllImport("user32.dll", EntryPoint = "SendInput")] private static extern uint SendRaw(uint count, byte[] input, int size);
+    [DllImport("user32.dll")] private static extern bool SetCursorPos(int x, int y);
+
+    // Only one thread per process may drive full-screen magnification, so the actual screen
+    // transform is read by a short-lived separate process.
+    private static async Task<(float Level, int X, int Y)> ReadScreenAsync()
+    {
+        using var reader = Process.Start(new ProcessStartInfo(Environment.ProcessPath!, "--magnifier-read") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true })!;
+        string line = (await reader.StandardOutput.ReadToEndAsync()).Trim();
+        await reader.WaitForExitAsync();
+        var parts = line.Split(' ');
+        return parts.Length == 3 ? (float.Parse(parts[0], System.Globalization.CultureInfo.InvariantCulture), int.Parse(parts[1]), int.Parse(parts[2])) : (0, 0, 0);
+    }
+
+    internal static int ReadProbe()
+    {
+        if (!MagInitialize() || !MagGetFullscreenTransform(out float level, out int x, out int y)) return 1;
+        Console.WriteLine(level.ToString(System.Globalization.CultureInfo.InvariantCulture) + " " + x + " " + y);
+        MagUninitialize();
+        return 0;
     }
 
     /// <summary>Child for the crash check: zooms 1.5× and waits to be killed.</summary>

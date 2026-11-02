@@ -149,7 +149,12 @@ internal sealed class MagnifierService : IDisposable
                 if (next != applied)
                 {
                     if (MagSetFullscreenTransform(next.Item1, next.Item2, next.Item3)) applied = next;
-                    else if (!reported) { reported = true; Failed?.Invoke("Лупа недоступна. Закройте экранную лупу Windows (Win+Esc)."); }
+                    else if (!reported)
+                    {
+                        reported = true;
+                        int error = Marshal.GetLastWin32Error();
+                        Failed?.Invoke($"Лупа недоступна (код {error}, {next.Item1:0.###}× {next.Item2},{next.Item3}). Закройте экранную лупу Windows (Win+Esc).");
+                    }
                 }
             }
         }

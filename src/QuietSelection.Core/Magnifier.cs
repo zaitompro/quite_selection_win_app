@@ -42,6 +42,7 @@ public static class MagnifierMath
     /// <summary>Offset that puts <paramref name="point"/> in the middle of the screen, clamped at the edges.</summary>
     public static MagPoint Center(MagPoint point, MagPoint screen, double scale)
     {
+        scale = Math.Max(1, scale); // An unreadable transform reports 0.
         double width = screen.X / scale, height = screen.Y / scale;
         return Clamp(new(point.X - width / 2, point.Y - height / 2), screen, scale);
     }
@@ -52,6 +53,7 @@ public static class MagnifierMath
     /// </summary>
     public static MagPoint FollowCaret(MagPoint offset, MagRect caret, MagPoint screen, double scale)
     {
+        scale = Math.Max(1, scale);
         double width = screen.X / scale, height = screen.Y / scale;
         double left = offset.X + width / 4, right = offset.X + width * 3 / 4;
         double top = offset.Y + height / 4, bottom = offset.Y + height * 3 / 4;
