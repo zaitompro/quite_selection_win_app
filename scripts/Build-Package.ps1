@@ -32,6 +32,15 @@ try {
     & $mt -nologo -manifest $uiAccessManifest "-outputresource:$magnifierExe;#1"
     if ($LASTEXITCODE -ne 0) { throw 'MAGNIFIER_MANIFEST_FAILED' }
     Remove-Item -LiteralPath $uiAccessManifest
+    # Windows starts a uiAccess executable only if the file itself carries a trusted signature;
+    # the package signature is not enough. Sign it with the existing local publisher key.
+    $thumbprintPath = Join-Path $projectRoot '.tools/signing/thumbprint.txt'
+    if (Test-Path -LiteralPath $thumbprintPath) {
+        $thumbprint = (Get-Content -LiteralPath $thumbprintPath -Raw).Trim()
+        $signTool = 'C:/Program Files (x86)/Windows Kits/10/bin/10.0.26100.0/x64/signtool.exe'
+        & $signTool sign /q /fd SHA256 /s My /sha1 $thumbprint $magnifierExe
+        if ($LASTEXITCODE -ne 0) { throw 'MAGNIFIER_SIGN_FAILED' }
+    } else { Write-Warning 'No local publisher key: the magnifier exe stays unsigned and runs without UIAccess.' }
     Copy-Item -LiteralPath (Join-Path $projectRoot 'LICENSE') -Destination $staging
     $runtime = Join-Path $staging 'runtime'
     New-Item -ItemType Directory -Path (Join-Path $runtime 'host'), (Join-Path $runtime 'shared') -Force | Out-Null
