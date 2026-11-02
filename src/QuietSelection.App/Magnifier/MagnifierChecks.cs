@@ -82,7 +82,7 @@ internal static class MagnifierChecks
                 // Ctrl+Alt + two wheel notches over the own window: zoom 1 → 1.5625, the box must not scroll.
                 SetCursorPos((int)((topLeft.X + bottomRight.X) / 2), (int)((topLeft.Y + bottomRight.Y) / 2));
                 double before = service.Scale;
-                SendKeys(0x11, 0x12); SendWheel(120); SendWheel(120); ReleaseKeys(0x12, 0x11);
+                PressKeys(0x11, 0x12); SendWheel(120); SendWheel(120); ReleaseKeys(0x12, 0x11);
                 await Task.Delay(800);
                 var (wheelLevel, _, _) = await ReadScreenAsync();
                 Add("wheel.ctrl_alt_zooms", before == 1 && Math.Abs(service.Scale - 1.5625) < 0.01 && Math.Abs(wheelLevel - 1.5625) < 0.02,
@@ -131,7 +131,7 @@ internal static class MagnifierChecks
         app.Startup += (_, _) => window.Show();
     }
 
-    private static void SendKeys(params ushort[] keys) => SendInput((uint)keys.Length, keys.Select(k => new KeyboardInput { Type = 1, Vk = k }).ToArray(), Marshal.SizeOf<KeyboardInput>());
+    private static void PressKeys(params ushort[] keys) => SendInput((uint)keys.Length, keys.Select(k => new KeyboardInput { Type = 1, Vk = k }).ToArray(), Marshal.SizeOf<KeyboardInput>());
     private static void ReleaseKeys(params ushort[] keys) => SendInput((uint)keys.Length, keys.Select(k => new KeyboardInput { Type = 1, Vk = k, Flags = 2 }).ToArray(), Marshal.SizeOf<KeyboardInput>());
     private static void SendWheel(int delta)
     {
