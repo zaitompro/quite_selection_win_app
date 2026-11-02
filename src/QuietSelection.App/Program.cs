@@ -14,6 +14,7 @@ internal static class Program
         if (args.Length == 2 && args[0] == "--native-speech-worker") return WorkerHost.RunNativeSpeech(args[1]);
         if (args.Length == 1 && args[0] == "--magnifier-crash-probe") return Magnifier.MagnifierChecks.CrashProbe();
         if (args.Length == 1 && args[0] == "--magnifier-read") return Magnifier.MagnifierChecks.ReadProbe();
+        if (args.Length == 2 && args[0] == "--window-theme-worker") return WindowTheme.WindowThemeHost.Run(args[1]);
         int exitCode = 0;
         // WinRT activation info must be read on this MTA thread, not the WPF STA thread.
         bool launchedAtSignIn = args.Length == 0 && Platform.StartupTaskClient.LaunchedAtSignIn();
@@ -41,6 +42,8 @@ internal static class Program
                     IntegrationChecks.Run(app, args);
                 else if (args.Contains("--magnifier-tests"))
                     Magnifier.MagnifierChecks.Run(app, args);
+                else if (args.Contains("--window-theme-tests"))
+                    WindowTheme.WindowThemeChecks.Run(app, args);
                 else if (args.Contains("--ocr-tests"))
                     OcrChecks.Run(app, args);
                 else if (args.Contains("--translation-tests"))

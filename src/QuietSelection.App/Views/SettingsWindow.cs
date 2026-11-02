@@ -20,7 +20,7 @@ namespace QuietSelection.App.Views;
 internal sealed partial class SettingsWindow : Window
 {
     private static readonly (string Glyph, string Title)[] Sections =
-        [("\uE80F", "Общие"), ("\uE767", "Речь"), ("\uE774", "Перевод"), ("\uE765", "Сочетания клавиш"), ("\uE7A8", "Чтение с экрана"), ("\uE71E", "Лупа")];
+        [("\uE80F", "Общие"), ("\uE767", "Речь"), ("\uE774", "Перевод"), ("\uE765", "Сочетания клавиш"), ("\uE7A8", "Чтение с экрана"), ("\uE71E", "Лупа"), ("\uE708", "Тёмные окна")];
 
     private readonly AppShell shell;
     private readonly ListBox navigation = new() { BorderThickness = new(0), Background = Brushes.Transparent };
@@ -151,6 +151,7 @@ internal sealed partial class SettingsWindow : Window
             case 3: Shortcuts(); break;
             case 4: Ocr(); break;
             case 5: MagnifierPage(); break;
+            case 6: DarkWindowsPage(); break;
         }
         foreach (var update in updaters) update();
         scroll.ScrollToVerticalOffset(offset);
@@ -208,25 +209,11 @@ internal sealed partial class SettingsWindow : Window
         Grid.SetColumn(about, 1); hero.Children.Add(about);
         Add(Ui.Card(hero, 16));
 
-        // Shortcut summary: the first thing a new user needs.
-        var assigned = Enum.GetValues<ReadingCommand>().Select(c => (c, shell.Settings.Hotkeys.GetValueOrDefault(c, ""))).Where(x => x.Item2.Length > 0).ToArray();
-        if (assigned.Length == 0)
+        // Shortcuts live only in their own section; here just a prompt when none is set.
+        if (!shell.Settings.Hotkeys.Values.Any(x => x.Length > 0))
             Add(Ui.InfoBar(Ui.Tone.Neutral, "Сочетания клавиш не назначены",
                 "Назначьте сочетание, чтобы читать выделенный текст в любом приложении.",
                 Ui.Button("Назначить…", () => OpenSection(3), accent: true)));
-        else
-        {
-            var list = new StackPanel();
-            foreach (var (command, chord) in assigned)
-            {
-                var line = new DockPanel { Margin = new(0, 2, 0, 2) };
-                var key = Ui.Badge(chord, Ui.Tone.Neutral); key.Margin = new(0); DockPanel.SetDock(key, Dock.Right);
-                line.Children.Add(key); line.Children.Add(new TextBlock { Text = CommandTitle(command), VerticalAlignment = VerticalAlignment.Center });
-                list.Children.Add(line);
-            }
-            Add(Ui.Section("Сочетания клавиш"));
-            Add(Ui.Card(list));
-        }
 
         Add(Ui.Section("Поведение"));
         Add(Ui.SettingRow("\uE823", "Запускать при входе в Windows", StartupDescription(), StartupToggle()));
@@ -511,7 +498,8 @@ internal sealed partial class SettingsWindow : Window
         ReadingCommand.Translate => "Перевести и прочитать",
         ReadingCommand.ToggleMagnifier => "Лупа: включить или выключить",
         ReadingCommand.InvertColors => "Лупа: негатив",
-        _ => "Лупа: следовать за кареткой"
+        ReadingCommand.FollowCaret => "Лупа: следовать за кареткой",
+        _ => "Тёмная тема для окна"
     };
 
     private static string CommandDescription(ReadingCommand command) => command switch
@@ -522,13 +510,14 @@ internal sealed partial class SettingsWindow : Window
         ReadingCommand.Translate => "Переводит выделенное на основной язык и читает перевод.",
         ReadingCommand.ToggleMagnifier => "Возвращает обычный масштаб или последнее увеличение.",
         ReadingCommand.InvertColors => "Инвертирует цвета всего экрана.",
-        _ => "Включает или выключает слежение за текстовым курсором при наборе."
+        ReadingCommand.FollowCaret => "Включает или выключает слежение за текстовым курсором при наборе.",
+        _ => "Затемняет активное окно или возвращает ему обычный вид."
     };
 
     private static string CommandGlyph(ReadingCommand command) => command switch
     {
         ReadingCommand.Selection => "\uE8D2", ReadingCommand.PrimaryVoice => "\uE767", ReadingCommand.Region => "\uE7A8", ReadingCommand.Translate => "\uE774",
-        ReadingCommand.ToggleMagnifier => "\uE71E", ReadingCommand.InvertColors => "\uE790", _ => "\uE8AC"
+        ReadingCommand.ToggleMagnifier => "\uE71E", ReadingCommand.InvertColors => "\uE790", ReadingCommand.FollowCaret => "\uE8AC", _ => "\uE708"
     };
 
     private readonly Dictionary<ReadingCommand, Button> shortcutButtons = [];
@@ -536,24 +525,50 @@ internal sealed partial class SettingsWindow : Window
     private void Shortcuts()
     {
         Add(Ui.PageTitle("Сочетания клавиш"));
-        Add(Ui.Secondary("Нажмите кнопку с сочетанием и введите новое: Ctrl или Alt вместе с обычной клавишей. Во время чтения повтор любой команды останавливает его.", Ui.Body));
-        page.Children[^1].SetValue(MarginProperty, new Thickness(0, 0, 0, 16));
+        Add(Ui.Secondary("Все клавиши и кнопки мыши QuietSelection собраны здесь. Нажмите кнопку с сочетанием и введите новое: Ctrl или Alt вместе с обычной клавишей.", Ui.Body));
         shortcutButtons.Clear();
-        foreach (var command in Enum.GetValues<ReadingCommand>())
-        {
-            string chord = shell.Settings.Hotkeys.GetValueOrDefault(command, "");
-            var record = Ui.Button(chord.Length == 0 ? "Не назначено" : chord, () => StartRecording(command), automationName: CommandTitle(command) + ": изменить сочетание");
-            record.MinWidth = 140;
-            shortcutButtons[command] = record;
-            var clear = Ui.Button("Удалить", () => { shell.ChangeHotkey(command, ""); RenderPage(keepPosition: true); }, automationName: CommandTitle(command) + ": удалить сочетание");
-            clear.MinWidth = 0; clear.Margin = new(0); clear.IsEnabled = chord.Length > 0;
-            var controls = new StackPanel { Orientation = Orientation.Horizontal };
-            controls.Children.Add(record); controls.Children.Add(clear);
-            Add(Ui.SettingRow(CommandGlyph(command), CommandTitle(command), CommandDescription(command), controls));
-        }
+
+        Add(Ui.Section("Чтение"));
+        foreach (var command in new[] { ReadingCommand.Selection, ReadingCommand.PrimaryVoice, ReadingCommand.Region, ReadingCommand.Translate })
+            Add(ShortcutRow(command));
+        var repeat = Ui.Secondary("Во время чтения повтор любой команды чтения останавливает его.");
+        repeat.Margin = new(4, 4, 0, 0); Add(repeat);
+
+        var options = shell.Settings.Magnifier;
+        Add(Ui.Section("Лупа"));
+        var modifier = new ComboBox { ItemsSource = MagnifierSettings.Modifiers.Select(x => x + " + колесо").ToArray(), SelectedIndex = Math.Max(0, MagnifierSettings.Modifiers.ToList().IndexOf(options.Modifier)), MinWidth = 200 };
+        modifier.SelectionChanged += (_, _) => { options.Modifier = MagnifierSettings.Modifiers[modifier.SelectedIndex]; shell.Save(); RenderPage(keepPosition: true); };
+        Add(Ui.SettingRow("\uE962", "Масштаб колесом", "Пока клавиши зажаты, колесо меняет масштаб лупы, а не прокручивает окно.", modifier));
+        string[] middleLabels = ["Не использовать", options.Modifier + " + щелчок колесом", "Щелчок колесом без клавиш"];
+        var middle = new ComboBox { ItemsSource = middleLabels, MinWidth = 200,
+            SelectedIndex = Math.Max(0, MagnifierSettings.MiddleClickModes.ToList().IndexOf(options.MiddleClick)) };
+        middle.SelectionChanged += (_, _) => { options.MiddleClick = MagnifierSettings.MiddleClickModes[middle.SelectedIndex]; shell.Save(); RenderPage(keepPosition: true); };
+        Add(Ui.SettingRow("\uE962", "Включение лупы щелчком колеса",
+            options.MiddleClick == "Alone"
+                ? "Щелчок колесом включает и выключает увеличение. В программах он больше не работает (например, ссылка в новой вкладке или закрытие вкладки); с Ctrl, Alt или Shift проходит как обычно."
+                : "Щелчок средней кнопкой включает увеличение на последнем уровне и выключает его.", middle));
+        foreach (var command in new[] { ReadingCommand.ToggleMagnifier, ReadingCommand.InvertColors, ReadingCommand.FollowCaret })
+            Add(ShortcutRow(command));
+
+        Add(Ui.Section("Тёмные окна"));
+        Add(ShortcutRow(ReadingCommand.DarkenWindow));
+
         var note = Ui.Secondary("Windows проверяет, что сочетание свободно, но оно может совпадать с командой внутри другого приложения — тогда сработает QuietSelection.");
         note.Margin = new(4, 8, 0, 0);
         Add(note);
+    }
+
+    private Border ShortcutRow(ReadingCommand command)
+    {
+        string chord = shell.Settings.Hotkeys.GetValueOrDefault(command, "");
+        var record = Ui.Button(chord.Length == 0 ? "Не назначено" : chord, () => StartRecording(command), automationName: CommandTitle(command) + ": изменить сочетание");
+        record.MinWidth = 140;
+        shortcutButtons[command] = record;
+        var clear = Ui.Button("Удалить", () => { shell.ChangeHotkey(command, ""); RenderPage(keepPosition: true); }, automationName: CommandTitle(command) + ": удалить сочетание");
+        clear.MinWidth = 0; clear.Margin = new(0); clear.IsEnabled = chord.Length > 0;
+        var controls = new StackPanel { Orientation = Orientation.Horizontal };
+        controls.Children.Add(record); controls.Children.Add(clear);
+        return Ui.SettingRow(CommandGlyph(command), CommandTitle(command), CommandDescription(command), controls);
     }
 
     private void StartRecording(ReadingCommand command)
@@ -643,26 +658,13 @@ internal sealed partial class SettingsWindow : Window
         var toggle = Ui.Button("", shell.ToggleMagnifier, automationName: "Включить или выключить увеличение");
         var zoomControls = new StackPanel { Orientation = Orientation.Horizontal };
         zoomControls.Children.Add(zoomText); zoomControls.Children.Add(toggle);
-        Add(Ui.SettingRow("\uE8A3", "Масштаб", "Колесо мыши с зажатыми клавишами меняет масштаб от 100 до 6400 %. Последний уровень запоминается.", zoomControls));
+        Add(Ui.SettingRow("\uE8A3", "Масштаб", "От 100 до 6400 %. Последний уровень запоминается и восстанавливается при включении.", zoomControls));
         updaters.Add(() =>
         {
             double scale = shell.MagnifierScale;
             zoomText.Text = Math.Round(scale * 100) + " %";
             toggle.Content = scale > 1 ? "Обычный масштаб" : "Увеличить до " + Math.Round(options.LastScale * 100) + " %";
         });
-
-        var modifier = new ComboBox { ItemsSource = MagnifierSettings.Modifiers.Select(x => x + " + колесо").ToArray(), SelectedIndex = Math.Max(0, MagnifierSettings.Modifiers.ToList().IndexOf(options.Modifier)), MinWidth = 180 };
-        modifier.SelectionChanged += (_, _) => { options.Modifier = MagnifierSettings.Modifiers[modifier.SelectedIndex]; shell.Save(); };
-        Add(Ui.SettingRow("\uE962", "Клавиши для масштаба", "Пока они зажаты, колесо меняет масштаб, а не прокручивает окно.", modifier));
-
-        string[] middleLabels = ["Не использовать", options.Modifier + " + средняя кнопка", "Средняя кнопка без клавиш"];
-        var middle = new ComboBox { ItemsSource = middleLabels, MinWidth = 220,
-            SelectedIndex = Math.Max(0, MagnifierSettings.MiddleClickModes.ToList().IndexOf(options.MiddleClick)) };
-        middle.SelectionChanged += (_, _) => { options.MiddleClick = MagnifierSettings.MiddleClickModes[middle.SelectedIndex]; shell.Save(); RenderPage(keepPosition: true); };
-        Add(Ui.SettingRow("\uE962", "Включение щелчком колеса",
-            options.MiddleClick == "Alone"
-                ? "Щелчок колесом включает и выключает увеличение. В программах он больше не работает: например, ссылка в новой вкладке или закрытие вкладки в браузере. С Ctrl, Alt или Shift щелчок проходит в программу как обычно."
-                : "Щелчок средней кнопкой (колесом) включает увеличение на последнем уровне и выключает его.", middle));
 
         var step = new ComboBox { ItemsSource = ZoomSteps.Select(x => x.Label).ToArray(), MinWidth = 180,
             SelectedIndex = Math.Max(0, Array.FindIndex(ZoomSteps, x => Math.Abs(x.Step - options.Step) < 0.01)) };
@@ -672,17 +674,51 @@ internal sealed partial class SettingsWindow : Window
         Add(Ui.Section("Цвета и слежение"));
         Add(Ui.SettingRow("\uE790", "Негатив", "Инвертирует цвета всего экрана. Работает и без увеличения.",
             Ui.Toggle(options.Invert, shell.SetMagnifierInvert, "Негатив")));
+        var style = new ComboBox { ItemsSource = new[] { "Классический", "С сохранением оттенков" }, MinWidth = 220,
+            SelectedIndex = options.InvertStyle == "Smart" ? 1 : 0 };
+        style.SelectionChanged += (_, _) => { options.InvertStyle = style.SelectedIndex == 1 ? "Smart" : "Classic"; shell.Save(); };
+        Add(Ui.SettingRow("\uE790", "Вид негатива", "«С сохранением оттенков» делает светлое тёмным, но красное остаётся красным, синее — синим.", style));
         Add(Ui.SettingRow("\uE8AC", "Следовать за кареткой", "Во время набора текста увеличенная область сдвигается за текстовым курсором. Движение мыши возвращает слежение за указателем.",
             Ui.Toggle(options.FollowCaret, shell.SetMagnifierFollowCaret, "Следовать за кареткой")));
         Add(Ui.SettingRow("\uE7B3", "Скрывать указатель при наборе", "Указатель не закрывает каретку; появляется снова при движении мыши.",
             Ui.Toggle(options.HideCursorWhileTyping, value => { options.HideCursorWhileTyping = value; shell.Save(); }, "Скрывать указатель при наборе")));
 
-        Add(Ui.Section("Сочетания клавиш"));
-        var assigned = new[] { ReadingCommand.ToggleMagnifier, ReadingCommand.InvertColors, ReadingCommand.FollowCaret }
-            .Select(c => CommandTitle(c) + ": " + (shell.Settings.Hotkeys.GetValueOrDefault(c, "") is { Length: > 0 } chord ? chord : "не назначено"));
-        Add(Ui.SettingRow("\uE765", "Быстрые команды", string.Join("\n", assigned), Ui.Button("Назначить…", () => OpenSection(3))));
+        var keys = Ui.Secondary("Клавиши масштаба, щелчок колесом и быстрые команды лупы настраиваются в разделе «Сочетания клавиш».");
+        keys.Margin = new(4, 12, 0, 0);
+        Add(keys);
         var note = Ui.Secondary("Не включайте одновременно экранную лупу Windows. В окнах, запущенных от имени администратора, колесо и каретка не отслеживаются.");
         note.Margin = new(4, 8, 0, 0);
+        Add(note);
+    }
+
+    // ---- Dark windows ---------------------------------------------------------------------
+
+    private void DarkWindowsPage()
+    {
+        var options = shell.Settings.WindowTheme;
+        Add(Ui.PageTitle("Тёмные окна"));
+        Add(Ui.InfoBar(Ui.Tone.Neutral, "Для окон без тёмного режима",
+            "Светлое окно затемняется наложением: яркость инвертируется, оттенки сохраняются. Щелчки и ввод проходят в окно как обычно."));
+        Add(Ui.SettingRow("\uE8B7", "Свойства файлов, папок и дисков", "Классические окна свойств (и другие окна с вкладками в старом стиле) затемняются автоматически, если они светлые.",
+            Ui.Toggle(options.Properties, value => { options.Properties = value; shell.Save(); }, "Свойства файлов, папок и дисков")));
+        Add(Ui.SettingRow("\uE718", "Запоминать затемнённые окна", "Окно, затемнённое сочетанием клавиш, запоминается по программе и типу окна; такие окна затемняются сами. Повторное нажатие на затемнённом окне забывает его.",
+            Ui.Toggle(options.Remember, value => { options.Remember = value; shell.Save(); }, "Запоминать затемнённые окна")));
+        var count = new TextBlock { VerticalAlignment = VerticalAlignment.Center };
+        updaters.Add(() => count.Text = shell.DarkWindowCount.ToString());
+        Add(Ui.SettingRow("\uE708", "Сейчас затемнено окон", null, count));
+
+        Add(Ui.Section("Запомненные окна"));
+        if (options.Rules.Count == 0)
+            Add(Ui.Secondary("Пока нет. Сделайте окно активным и нажмите сочетание «Тёмная тема для окна» (назначается в разделе «Сочетания клавиш»).", Ui.Body));
+        foreach (var rule in options.Rules.ToArray())
+        {
+            var parts = rule.Split('|');
+            var remove = Ui.Button("Удалить", () => { shell.RemoveWindowRule(rule); RenderPage(keepPosition: true); }, automationName: "Забыть окна " + parts[0]);
+            remove.MinWidth = 0;
+            Add(Ui.SettingRow("\uE737", parts[0], "Тип окна: " + parts[1], remove));
+        }
+        var note = Ui.Secondary("Меню и подсказки поверх окна остаются светлыми. При перемещении и прокрутке возможна задержка в кадр. Окна администратора тоже затемняются, но запоминание для них может не сработать.");
+        note.Margin = new(4, 12, 0, 0);
         Add(note);
     }
 }

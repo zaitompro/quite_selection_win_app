@@ -70,7 +70,7 @@ internal sealed class MagnifierService : IDisposable
             {
                 Enabled = settings.Enabled, Modifier = settings.Modifier, Step = settings.Step, LastScale = settings.LastScale,
                 Invert = settings.Invert, FollowCaret = settings.FollowCaret, HideCursorWhileTyping = settings.HideCursorWhileTyping,
-                MiddleClick = settings.MiddleClick
+                MiddleClick = settings.MiddleClick, InvertStyle = settings.InvertStyle
             };
             invert = settings.Invert;
             lastScale = Math.Max(1.25, settings.LastScale);
@@ -104,27 +104,27 @@ internal sealed class MagnifierService : IDisposable
     private void RenderLoop()
     {
         if (!MagInitialize()) { Failed?.Invoke("Не удалось запустить лупу Windows (Magnification API)."); render = null; return; }
-        double scale = 1; bool invertApplied = false, cursorHidden = false, caretMode = false, reported = false;
+        double scale = 1; string appliedStyle = "Classic"; bool invertApplied = false, cursorHidden = false, caretMode = false, reported = false;
         (float Level, int X, int Y) applied = (1, 0, 0);
         long caretSeen = 0; Point caretStart = default; MagPoint offset = default;
         try
         {
             while (!stopping)
             {
-                double target; bool wantInvert; MagRect? caretRect; long version; bool follow, hide;
+                double target; bool wantInvert; MagRect? caretRect; long version; bool follow, hide; string style;
                 lock (gate)
                 {
                     target = targetScale; wantInvert = invert; caretRect = caret; version = caretVersion;
-                    follow = options.FollowCaret; hide = options.HideCursorWhileTyping;
+                    follow = options.FollowCaret; hide = options.HideCursorWhileTyping; style = options.InvertStyle;
                 }
-                bool idle = scale == 1 && target == 1 && wantInvert == invertApplied && !cursorHidden && applied.Level == 1;
+                bool idle = scale == 1 && target == 1 && wantInvert == invertApplied && (!wantInvert || style == appliedStyle) && !cursorHidden && applied.Level == 1;
                 if (idle) { wake.WaitOne(); continue; }
                 if (DwmFlush() < 0) Thread.Sleep(16); // No composition (locked or display off).
 
-                if (wantInvert != invertApplied)
+                if (wantInvert != invertApplied || (wantInvert && style != appliedStyle))
                 {
-                    var effect = wantInvert ? ColorEffect.Invert() : ColorEffect.Identity();
-                    if (MagSetFullscreenColorEffect(ref effect)) invertApplied = wantInvert;
+                    var effect = wantInvert ? ColorEffect.Invert(style == "Smart") : ColorEffect.Identity();
+                    if (MagSetFullscreenColorEffect(ref effect)) { invertApplied = wantInvert; appliedStyle = style; }
                     else if (!reported) { reported = true; Failed?.Invoke("Не удалось включить негатив экрана."); }
                 }
                 // Short ease towards the new zoom; the pointer stays centered while it changes.

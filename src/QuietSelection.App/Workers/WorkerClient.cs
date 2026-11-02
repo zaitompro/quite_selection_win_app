@@ -78,7 +78,7 @@ internal sealed class WorkerClient(IReadOnlyDictionary<Speech.SpeechEngine, stri
 
     internal async Task<WorkerResponse> CallAsync(WorkerRequest request, TimeSpan timeout, CancellationToken token)
     {
-        if (request.Kind is "voices" or "ocr" or "ocr-languages" or "ocr-fixture")
+        if (request.Kind is "voices" or "ocr" or "ocr-languages" or "ocr-fixture" or "capture-probe")
             return await ExecuteAsync(request, timeout, token); // Own short-lived process each time.
         var slot = request.Kind == "selection" ? selectionSlot : workerSlot;
         await slot.WaitAsync(token);

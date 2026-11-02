@@ -10,8 +10,8 @@ internal static class MagnifierNative
     {
         [MarshalAs(UnmanagedType.ByValArray, SizeConst = 25)] internal float[] Matrix;
         internal static ColorEffect Identity() => new() { Matrix = [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1] };
-        // Each channel becomes 1 − value; alpha is kept.
-        internal static ColorEffect Invert() => new() { Matrix = [-1, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 0, 1] };
+        // Classic or hue-preserving inversion (see MagnifierMath.InvertMatrix); alpha is kept.
+        internal static ColorEffect Invert(bool smart = false) => new() { Matrix = MagnifierMath.InvertMatrix(smart) };
     }
 
     [StructLayout(LayoutKind.Sequential)] internal struct Point { internal int X, Y; }

@@ -147,6 +147,7 @@ internal sealed partial class AppShell : IDisposable
             if (!hotkeys.Set(binding.Key, binding.Value)) Status = "Не удалось зарегистрировать сочетание " + binding.Value;
         tray = new TrayIcon(ShowSettings, Stop, Exit);
         ApplyMagnifier();
+        _ = ApplyWindowThemeAsync();
         await RefreshStartupAsync();
         if (!inTray) ShowSettings();
         await RefreshVoicesAsync();
@@ -185,6 +186,7 @@ internal sealed partial class AppShell : IDisposable
         catch { SetStatus("Не удалось сохранить настройки."); }
         UpdateResidentVoices();
         ApplyMagnifier();
+        _ = ApplyWindowThemeAsync();
     }
 
     /// <summary>Moves an unreadable settings file aside and starts from defaults.</summary>
@@ -513,7 +515,7 @@ internal sealed partial class AppShell : IDisposable
         StopMagnifier();
         operations.Stop(); modelPreparation?.Cancel(); voiceDownload?.Cancel();
         foreach (var set in ResidentVoiceSets) set.Cancel();
-        worker.Dispose(); translator.Dispose(); tray?.Dispose(); indicator?.Close(); hotkeys?.Dispose(); openSettings?.Dispose();
+        worker.Dispose(); translator.Dispose(); windowTheme.Dispose(); tray?.Dispose(); indicator?.Close(); hotkeys?.Dispose(); openSettings?.Dispose();
         if (ownsMutex) mutex.ReleaseMutex();
         mutex.Dispose();
     }

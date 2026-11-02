@@ -77,6 +77,7 @@ internal sealed partial class AppShell
             case ReadingCommand.ToggleMagnifier: ToggleMagnifier(); break;
             case ReadingCommand.InvertColors: SetMagnifierInvert(!Settings.Magnifier.Invert); break;
             case ReadingCommand.FollowCaret: SetMagnifierFollowCaret(!Settings.Magnifier.FollowCaret); break;
+            case ReadingCommand.DarkenWindow: _ = DarkenForegroundWindowAsync(); break;
             default: _ = ReadAsync(command); break;
         }
     }

@@ -270,6 +270,32 @@ Test("magnifier.caret_moves_view_only_outside_center", () =>
     var away = MagnifierMath.FollowCaret(offset, new(100, 1000, 2, 20), screen, 2);
     Check(away == MagnifierMath.Center(new(101, 1010), screen, 2));
 });
+Test("magnifier.smart_invert_keeps_hue", () =>
+{
+    var smart = MagnifierMath.InvertMatrix(true);
+    var white = MagnifierMath.ApplyMatrix(smart, 1, 1, 1);
+    var black = MagnifierMath.ApplyMatrix(smart, 0, 0, 0);
+    Check(white.R < 0.01 && white.G < 0.01 && white.B < 0.01 && black.R > 0.99 && black.G > 0.99 && black.B > 0.99);
+    // A dark red stays reddish and becomes lighter; a classic negative turns it cyan.
+    var red = MagnifierMath.ApplyMatrix(smart, 0.6, 0.1, 0.1);
+    Check(red.R > red.G + 0.2 && red.R > red.B + 0.2);
+    var classic = MagnifierMath.ApplyMatrix(MagnifierMath.InvertMatrix(false), 0.6, 0.1, 0.1);
+    Check(classic.G > classic.R && classic.B > classic.R);
+    // Gray levels are inverted exactly in both styles.
+    var gray = MagnifierMath.ApplyMatrix(smart, 0.25, 0.25, 0.25);
+    Check(Math.Abs(gray.R - 0.75) < 0.01 && Math.Abs(gray.G - 0.75) < 0.01 && Math.Abs(gray.B - 0.75) < 0.01);
+});
+Test("window_theme.rules_and_validation", () =>
+{
+    Check(WindowThemeSettings.Rule("Explorer", "#32770") == "explorer|#32770");
+    var settings = Config();
+    Check(!settings.WindowTheme.Properties && settings.WindowTheme.Remember && settings.WindowTheme.Rules.Count == 0);
+    settings.WindowTheme.Rules.Add("explorer|#32770"); settings.Validate();
+    settings.WindowTheme.Rules.Add("explorer|#32770"); Error(ErrorCode.InvalidSettings, settings.Validate);
+    settings = Config(); settings.WindowTheme.Rules.Add("no-separator"); Error(ErrorCode.InvalidSettings, settings.Validate);
+    var legacy = System.Text.Json.JsonSerializer.Deserialize<AppSettings>("{}")!;
+    legacy.Validate();
+});
 Test("magnifier.settings_default_and_validation", () =>
 {
     var legacy = System.Text.Json.JsonSerializer.Deserialize<AppSettings>("{\"SchemaVersion\":1}")!;

@@ -125,13 +125,27 @@ internal static class WorkerHost
                 region.Validate((int)maximumDimension);
                 if (request.SourceWindow == 0 || NativeMethods.GetForegroundWindow() != (nint)request.SourceWindow)
                     throw new QuietException(ErrorCode.SourceChanged);
-                using (var captured = new Bitmap(region.Width, region.Height, PixelFormat.Format32bppArgb))
+                // What the user circled on a magnified screen, not the unmagnified desktop pixels.
+                using (var captured = ScreenCapture.CaptureDesktopRegion(region, (int)maximumDimension))
                 {
-                    using (var graphics = Graphics.FromImage(captured))
-                        graphics.CopyFromScreen(region.X, region.Y, 0, 0, captured.Size, CopyPixelOperation.SourceCopy);
                     if (NativeMethods.GetForegroundWindow() != (nint)request.SourceWindow)
                         throw new QuietException(ErrorCode.SourceChanged);
                     return Recognize(captured, request.Language);
+                }
+            case "capture-probe":
+                // Checks only: two brightness numbers of a synthetic striped window, no image is returned.
+                if (request.Region is not { } probeRegion) return new(Text: "ERR no region");
+                Magnifier.MagnifierNative.MagInitialize();
+                Magnifier.MagnifierNative.MagGetFullscreenTransform(out float probeLevel, out int probeX, out int probeY);
+                Magnifier.MagnifierNative.MagUninitialize();
+                string probeState = $"level={probeLevel} offset={probeX},{probeY} region={probeRegion} screen={Magnifier.MagnifierNative.GetSystemMetrics(0)}x{Magnifier.MagnifierNative.GetSystemMetrics(1)}";
+                Bitmap probe;
+                try { probe = ScreenCapture.CaptureDesktopRegion(probeRegion, 8192); }
+                catch (QuietException) { return new(Text: "ERR " + probeState); }
+                using (probe)
+                {
+                    var (leftMean, rightMean) = ScreenCapture.Fingerprint(probe);
+                    return new(Text: leftMean.ToString("0.000", System.Globalization.CultureInfo.InvariantCulture) + " " + rightMean.ToString("0.000", System.Globalization.CultureInfo.InvariantCulture));
                 }
             case "ocr-fixture":
                 using (var bitmap = DrawFixture(request.Text, request.Fixture))

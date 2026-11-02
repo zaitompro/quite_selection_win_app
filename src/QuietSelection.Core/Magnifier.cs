@@ -6,6 +6,8 @@ public sealed class MagnifierSettings
     public static readonly IReadOnlyList<string> Modifiers = ["Ctrl+Alt", "Alt", "Shift+Alt", "Ctrl+Shift"];
     /// <summary>Middle button toggles zoom: off, with the zoom modifier held, or a plain middle click.</summary>
     public static readonly IReadOnlyList<string> MiddleClickModes = ["Off", "Modifier", "Alone"];
+    /// <summary>Classic negative, or brightness inverted with hues kept (light UI becomes dark, red stays red).</summary>
+    public static readonly IReadOnlyList<string> InvertStyles = ["Classic", "Smart"];
     public bool Enabled { get; set; }
     /// <summary>Keys held while turning the wheel to zoom.</summary>
     public string Modifier { get; set; } = "Ctrl+Alt";
@@ -17,6 +19,7 @@ public sealed class MagnifierSettings
     public bool FollowCaret { get; set; } = true;
     public bool HideCursorWhileTyping { get; set; } = true;
     public string MiddleClick { get; set; } = "Off";
+    public string InvertStyle { get; set; } = "Classic";
 }
 
 public readonly record struct MagPoint(double X, double Y);
@@ -33,6 +36,26 @@ public readonly record struct MagRect(double X, double Y, double Width, double H
 /// </summary>
 public static class MagnifierMath
 {
+    /// <summary>
+    /// 5x5 color matrices for the Magnification API (row vector [r g b a 1] x M).
+    /// Smart: invert, then rotate hue by 180 degrees (luminance weights 0.213/0.715/0.072), so white
+    /// becomes black while colored items keep their hue.
+    /// </summary>
+    public static float[] InvertMatrix(bool smart) => smart
+        ? [0.574f, -0.426f, -0.426f, 0, 0,
+           -1.430f, -0.430f, -1.430f, 0, 0,
+           -0.144f, -0.144f, 0.856f, 0, 0,
+           0, 0, 0, 1, 0,
+           1, 1, 1, 0, 1]
+        : [-1, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 0, 1];
+
+    /// <summary>Applies a matrix to one color (0..1 channels, clamped), for tests and previews.</summary>
+    public static (double R, double G, double B) ApplyMatrix(float[] m, double r, double g, double b)
+    {
+        double Channel(int i) => Math.Clamp(r * m[i] + g * m[5 + i] + b * m[10 + i] + m[20 + i], 0, 1);
+        return (Channel(0), Channel(1), Channel(2));
+    }
+
     // Windows Magnifier stops at 16x (1600 %); the API itself accepts at least 64x.
     public const double MaximumScale = 64.0;
 

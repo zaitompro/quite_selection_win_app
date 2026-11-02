@@ -20,7 +20,13 @@ internal static class MagnifierChecks
         Directory.CreateDirectory(directory);
         var window = new Window { Title = "QuietSelection — проверка лупы", Width = 640, Height = 240, FontSize = 20, WindowStartupLocation = WindowStartupLocation.CenterScreen, Topmost = true };
         var field = new TextBox { Text = "Синтетический текст для проверки каретки.", Margin = new(24) };
-        window.Content = field;
+        // Black left, white right: a capture of the wrong area would not keep this pattern.
+        var stripes = new Grid { Height = 80, Margin = new(24, 0, 24, 24) };
+        stripes.ColumnDefinitions.Add(new()); stripes.ColumnDefinitions.Add(new());
+        var dark = new Border { Background = System.Windows.Media.Brushes.Black }; var bright = new Border { Background = System.Windows.Media.Brushes.White };
+        Grid.SetColumn(bright, 1); stripes.Children.Add(dark); stripes.Children.Add(bright);
+        var panel = new StackPanel(); panel.Children.Add(field); panel.Children.Add(stripes);
+        window.Content = panel; window.Height = 320;
         window.Loaded += async (_, _) =>
         {
             try { await RunChecksAsync(); }
@@ -54,6 +60,29 @@ internal static class MagnifierChecks
                 await File.WriteAllTextAsync(Path.Combine(directory, "magnifier.json"), JsonSerializer.Serialize(new { syntheticDataOnly = true, checks }, new JsonSerializerOptions { WriteIndented = true }));
                 window.Close(); app.Shutdown(failed ? 1 : 0); return;
             }
+            // Capture under magnification: the same striped region at 1x and 2x.
+            {
+                var a = stripes.PointToScreen(new System.Windows.Point(0, 0));
+                var b = stripes.PointToScreen(new System.Windows.Point(stripes.ActualWidth, stripes.ActualHeight));
+                var stripeRegion = new PixelRegion((int)a.X + 4, (int)a.Y + 4, (int)(b.X - a.X) - 8, (int)(b.Y - a.Y) - 8);
+                using var worker = new Workers.WorkerClient();
+                string plain = (await worker.CallAsync(new("capture-probe", Region: stripeRegion), TimeSpan.FromSeconds(15), CancellationToken.None)).Text;
+                if (plain.StartsWith("ERR", StringComparison.Ordinal)) { Add("capture.region_matches_under_2x_zoom", false, new { plain, stripeRegion }); goto afterCapture; }
+                GetCursorPos(out var keep);
+                SetCursorPos((int)((a.X + b.X) / 2), (int)((a.Y + b.Y) / 2));
+                using (var zoom = new MagnifierService())
+                {
+                    zoom.Start(new MagnifierSettings { Enabled = true, FollowCaret = false });
+                    await Task.Delay(300); zoom.Toggle(); await Task.Delay(900);
+                    string zoomed = (await worker.CallAsync(new("capture-probe", Region: stripeRegion), TimeSpan.FromSeconds(15), CancellationToken.None)).Text;
+                    double[] p = plain.Split(' ').Select(x => double.Parse(x, System.Globalization.CultureInfo.InvariantCulture)).ToArray();
+                    double[] z = zoomed.StartsWith("ERR", StringComparison.Ordinal) ? [-1, -1] : zoomed.Split(' ').Select(x => double.Parse(x, System.Globalization.CultureInfo.InvariantCulture)).ToArray();
+                    Add("capture.region_matches_under_2x_zoom", p[0] < 0.1 && p[1] > 0.9 && z[0] < 0.1 && z[1] > 0.9, new { plain, zoomed, stripeRegion });
+                }
+                SetCursorPos(keep.X, keep.Y);
+                await Task.Delay(500);
+            }
+            afterCapture:
             // Live zoom: 2× centered on the pointer, then back to 1×.
             using (var service = new MagnifierService())
             {
