@@ -139,3 +139,5 @@ while a region is selected or captured, so it never enters the OCR image. Start 
 sign-in uses the package `StartupTask` (`QuietSelectionStartup`, off by default).
 Icons are drawn by `AppIcon`; `QuietSelection.exe --export-icons assets/icons`
 regenerates the MSIX logos and the executable icon.
+
+Magnifier zoom animation (since 0.1.0.35): a new target (toggle or wheel) starts a time-based animation from the current zoom, eased (smoothstep) on a logarithmic scale (`MagnifierMath.AnimatedScale`). Turning zoom on or off takes `MagnifierSettings.AnimationMs` (0–800 ms offered, default 400); steps between zoomed levels take half. While zooming from or to 1x the pointer is drawn where it really is at 1x and glides to the centre as the zoom grows (`MagnifierMath.ZoomFromPointer`), so the area being enlarged stays visible. Installed test on 2 November: all selection checks and the OCR-under-pointer check passed in 0.1.0.35; the packaged test window takes the foreground after an F24 tap.
