@@ -400,6 +400,36 @@ Test("settings.resident_piper_legacy_default_and_opt_out", () =>
     legacy.KeepPiperLoaded = false;
     Check(!legacy.Snapshot().KeepPiperLoaded);
 });
+Test("magnifier.zoom_animation", () =>
+{
+    bool Near(double a, double b) => Math.Abs(a - b) < 1e-6;
+    // Ends are exact; the middle of 1→4 is 2 (geometric), and the curve starts and ends gently.
+    Check(Near(MagnifierMath.AnimatedScale(1, 4, 0), 1) && Near(MagnifierMath.AnimatedScale(1, 4, 1), 4));
+    Check(Near(MagnifierMath.AnimatedScale(1, 4, 0.5), 2));
+    Check(MagnifierMath.Ease(0.1) < 0.1 && MagnifierMath.Ease(0.9) > 0.9);
+    var screen = new MagPoint(1920, 1080);
+    var pointer = new MagPoint(300, 200);
+    // At 1x nothing moves; at the zoomed end the view is the usual pointer-centred one.
+    var start = MagnifierMath.ZoomFromPointer(pointer, screen, 1, 1, 4);
+    Check(Near(start.X, 0) && Near(start.Y, 0));
+    var end = MagnifierMath.ZoomFromPointer(pointer, screen, 4, 1, 4);
+    var centred = MagnifierMath.Center(pointer, screen, 4);
+    Check(Near(end.X, centred.X) && Near(end.Y, centred.Y));
+    // On the way the pointer is drawn between its real place and the centre (before clamping).
+    var middle = MagnifierMath.ZoomFromPointer(new MagPoint(960, 540), screen, 2, 1, 4);
+    Check(Near(middle.X, 960 - 960 / 2.0) && Near(middle.Y, 540 - 540 / 2.0));
+    // Between two zoomed levels it is simply centred.
+    var between = MagnifierMath.ZoomFromPointer(pointer, screen, 3, 2, 4);
+    var centre3 = MagnifierMath.Center(pointer, screen, 3);
+    Check(Near(between.X, centre3.X) && Near(between.Y, centre3.Y));
+});
+Test("settings.magnifier_animation_default_and_range", () =>
+{
+    var legacy = System.Text.Json.JsonSerializer.Deserialize<AppSettings>("{\"SchemaVersion\":1}")!;
+    legacy.Validate(); Check(legacy.Magnifier.AnimationMs == 400);
+    legacy.Magnifier.AnimationMs = 5000;
+    Error(ErrorCode.InvalidSettings, () => legacy.Validate());
+});
 Test("ocr_layout.paragraph_under_pointer", () =>
 {
     // Two paragraphs of a column (20 px lines, 6 px leading, 30 px between paragraphs) and a side label.

@@ -20,6 +20,10 @@ public sealed class MagnifierSettings
     public bool HideCursorWhileTyping { get; set; } = true;
     public string MiddleClick { get; set; } = "Off";
     public string InvertStyle { get; set; } = "Classic";
+    /// <summary>Choices offered for the zoom animation, in milliseconds; 0 turns it off.</summary>
+    public static readonly IReadOnlyList<int> AnimationChoices = [0, 250, 400, 600, 800];
+    /// <summary>Duration of turning zoom on or off; wheel steps take half of it.</summary>
+    public int AnimationMs { get; set; } = 400;
 }
 
 public readonly record struct MagPoint(double X, double Y);
@@ -67,6 +71,39 @@ public static class MagnifierMath
     }
 
     /// <summary>Offset that puts <paramref name="point"/> in the middle of the screen, clamped at the edges.</summary>
+    /// <summary>Smooth start and end (smoothstep), for animation progress 0..1.</summary>
+    public static double Ease(double progress)
+    {
+        progress = Math.Clamp(progress, 0, 1);
+        return progress * progress * (3 - 2 * progress);
+    }
+
+    /// <summary>
+    /// Zoom during an animation from one level to another. Interpolated on a logarithmic scale, so
+    /// 1→2× and 4→8× feel equally fast.
+    /// </summary>
+    public static double AnimatedScale(double from, double to, double progress)
+    {
+        from = Math.Max(1, from); to = Math.Max(1, to);
+        return Math.Exp(Math.Log(from) + (Math.Log(to) - Math.Log(from)) * Ease(progress));
+    }
+
+    /// <summary>
+    /// View offset while zooming from or to 1×: the pointer starts where it really is on screen and
+    /// glides to the centre as the zoom grows, so the area being enlarged stays visible. Between two
+    /// zoomed levels (and once zoomed) it is the usual pointer-centred view.
+    /// </summary>
+    public static MagPoint ZoomFromPointer(MagPoint pointer, MagPoint screen, double scale, double from, double to)
+    {
+        scale = Math.Max(1, scale);
+        double top = Math.Max(from, to);
+        if (Math.Min(from, to) > 1 || top <= 1) return Center(pointer, screen, scale);
+        double toward = Math.Clamp(Math.Log(scale) / Math.Log(top), 0, 1); // 0 at 1×, 1 at the zoomed end.
+        double shownX = pointer.X + (screen.X / 2 - pointer.X) * toward;
+        double shownY = pointer.Y + (screen.Y / 2 - pointer.Y) * toward;
+        return Clamp(new(pointer.X - shownX / scale, pointer.Y - shownY / scale), screen, scale);
+    }
+
     public static MagPoint Center(MagPoint point, MagPoint screen, double scale)
     {
         scale = Math.Max(1, scale); // An unreadable transform reports 0.

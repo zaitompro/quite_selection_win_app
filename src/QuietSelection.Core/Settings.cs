@@ -48,6 +48,7 @@ public sealed class AppSettings
         if (Magnifier is null || !MagnifierSettings.Modifiers.Contains(Magnifier.Modifier) ||
             Magnifier.Step is < 1.05 or > 2.0 || Magnifier.LastScale is < 1.0 or > MagnifierMath.MaximumScale ||
             !MagnifierSettings.MiddleClickModes.Contains(Magnifier.MiddleClick) || !MagnifierSettings.InvertStyles.Contains(Magnifier.InvertStyle) ||
+            Magnifier.AnimationMs is < 0 or > 1500 ||
             WindowTheme is null || !WindowTheme.Validate())
             throw new QuietException(ErrorCode.InvalidSettings);
     }

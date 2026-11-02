@@ -676,6 +676,16 @@ internal sealed partial class SettingsWindow : Window
         step.SelectionChanged += (_, _) => { options.Step = ZoomSteps[step.SelectedIndex].Step; shell.Save(); };
         Add(Ui.SettingRow("\uE9E9", "Шаг масштаба", "Насколько меняется увеличение за один щелчок колеса.", step));
 
+        var choices = MagnifierSettings.AnimationChoices;
+        var animation = new ComboBox
+        {
+            ItemsSource = choices.Select(ms => ms == 0 ? "Без анимации" : (ms / 1000.0).ToString("0.##", System.Globalization.CultureInfo.GetCultureInfo("ru-RU")) + " с").ToArray(),
+            MinWidth = 160,
+            SelectedIndex = Math.Max(0, choices.ToList().IndexOf(options.AnimationMs))
+        };
+        animation.SelectionChanged += (_, _) => { options.AnimationMs = choices[animation.SelectedIndex]; shell.Save(); };
+        Add(Ui.SettingRow("\uE916", "Плавность увеличения", "Сколько длится включение и выключение увеличения; шаги колесом — вдвое быстрее. Увеличение начинается от места, где стоит указатель, и он плавно уходит в центр.", animation));
+
         var exact = new TextBlock { VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap, MaxWidth = 260, TextAlignment = TextAlignment.Right };
         updaters.Add(() => exact.Text = shell.MagnifierInputTransform switch
         {

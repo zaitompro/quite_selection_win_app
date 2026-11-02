@@ -15,6 +15,14 @@ internal static class Program
         if (args.Length == 1 && args[0] == "--magnifier-crash-probe") return Magnifier.MagnifierChecks.CrashProbe();
         if (args.Length == 1 && args[0] == "--magnifier-read") return Magnifier.MagnifierChecks.ReadProbe();
         if (args.Length == 2 && args[0] == "--magnifier-host") return Magnifier.MagnifierHost.Run(args[1]);
+        if (args.Length == 2 && args[0] == "--ocr-point-probe")
+        {
+            // Test aid: line boxes recognized around the pointer; no text is printed.
+            Platform.NativeMethods.GetCursorPos(out var at);
+            using var around = Workers.ScreenCapture.CaptureAroundPointer(at.X, at.Y, 1200, 360, out var inImage);
+            Console.Out.Write(Workers.OcrPipeline.DescribeAt(around, args[1], inImage));
+            return 0;
+        }
         if (args.Length == 2 && args[0] == "--pointer-probe")
         {
             // Test aid: compares the text under the pointer with an expected synthetic phrase; never prints the text.

@@ -79,6 +79,20 @@ internal static partial class OcrPipeline
         throw new QuietException(ErrorCode.OcrEmpty);
     }
 
+    /// <summary>Test aid: the recognized line boxes around the pointer and their lengths, never the text.</summary>
+    internal static string DescribeAt(Bitmap capture, string language, System.Drawing.Point pointer)
+    {
+        int scale = capture.Height < SmallHeight ? 3 : capture.Height < MediumHeight ? 2 : 1;
+        int margin = Margin(capture.Height, scale);
+        using var prepared = Prepare(capture, scale);
+        var lines = RunLines(prepared, language)
+            .Select(x => x with { Left = (x.Left - margin) / scale, Top = (x.Top - margin) / scale, Right = (x.Right - margin) / scale, Bottom = (x.Bottom - margin) / scale })
+            .OrderBy(x => x.Top).ToList();
+        string picked = OcrLayout.PickParagraph(lines, pointer.X, pointer.Y);
+        return $"image={capture.Width}x{capture.Height} scale={scale} pointer={pointer.X},{pointer.Y} picked={picked.Length} lines=" +
+            string.Join(" ", lines.Select(l => $"[{l.Left},{l.Top}-{l.Right},{l.Bottom} n={l.Text.Length}]"));
+    }
+
     private static List<OcrLine> RunLines(Bitmap bitmap, string language)
     {
         var data = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);

@@ -77,7 +77,7 @@ internal sealed class MagnifierService : IDisposable
             {
                 Enabled = settings.Enabled, Modifier = settings.Modifier, Step = settings.Step, LastScale = settings.LastScale,
                 Invert = settings.Invert, FollowCaret = settings.FollowCaret, HideCursorWhileTyping = settings.HideCursorWhileTyping,
-                MiddleClick = settings.MiddleClick, InvertStyle = settings.InvertStyle
+                MiddleClick = settings.MiddleClick, InvertStyle = settings.InvertStyle, AnimationMs = settings.AnimationMs
             };
             invert = settings.Invert;
             lastScale = Math.Max(1.25, settings.LastScale);
@@ -114,15 +114,18 @@ internal sealed class MagnifierService : IDisposable
         double scale = 1; string appliedStyle = "Classic"; bool invertApplied = false, cursorHidden = false, caretMode = false, reported = false;
         (float Level, int X, int Y) applied = (1, 0, 0);
         long caretSeen = 0; Point caretStart = default; MagPoint offset = default;
+        // Current zoom animation: from, to, start time and duration; anchorTop > 0 while a zoom from
+        // or to 1x is under way (the pointer glides between its real place and the centre).
+        double animationFrom = 1, animationTo = 1, animationMs = 0, anchorTop = 0; long animationStart = 0;
         try
         {
             while (!stopping)
             {
-                double target; bool wantInvert; MagRect? caretRect; long version; bool follow, hide; string style;
+                double target; bool wantInvert; MagRect? caretRect; long version; bool follow, hide; string style; int duration;
                 lock (gate)
                 {
                     target = targetScale; wantInvert = invert; caretRect = caret; version = caretVersion;
-                    follow = options.FollowCaret; hide = options.HideCursorWhileTyping; style = options.InvertStyle;
+                    follow = options.FollowCaret; hide = options.HideCursorWhileTyping; style = options.InvertStyle; duration = options.AnimationMs;
                 }
                 bool idle = scale == 1 && target == 1 && wantInvert == invertApplied && (!wantInvert || style == appliedStyle) && !cursorHidden && applied.Level == 1;
                 if (idle) { wake.WaitOne(); continue; }
@@ -134,8 +137,18 @@ internal sealed class MagnifierService : IDisposable
                     if (MagSetFullscreenColorEffect(ref effect)) { invertApplied = wantInvert; appliedStyle = style; }
                     else if (!reported) { reported = true; Failed?.Invoke("Не удалось включить негатив экрана."); }
                 }
-                // Short ease towards the new zoom; the pointer stays centered while it changes.
-                scale = Math.Abs(target - scale) < 0.01 ? target : scale + (target - scale) * 0.35;
+                if (target != animationTo)
+                {
+                    // A new target (toggle or wheel) starts a fresh animation from the current zoom.
+                    bool unfinished = scale != animationTo;
+                    bool viaOne = scale <= 1.0001 || target <= 1 || (anchorTop > 0 && unfinished);
+                    animationFrom = scale; animationTo = target; animationStart = Stopwatch.GetTimestamp();
+                    animationMs = viaOne ? duration : duration / 2.0;
+                    anchorTop = viaOne ? (target > 1 ? target : Math.Max(scale, anchorTop)) : 0;
+                }
+                double progress = animationMs <= 0 ? 1 : Stopwatch.GetElapsedTime(animationStart).TotalMilliseconds / animationMs;
+                scale = progress >= 1 ? animationTo : MagnifierMath.AnimatedScale(animationFrom, animationTo, progress);
+                if (progress >= 1) anchorTop = 0;
 
                 GetCursorPos(out var cursor);
                 var screen = new MagPoint(GetSystemMetrics(0), GetSystemMetrics(1));
@@ -149,6 +162,7 @@ internal sealed class MagnifierService : IDisposable
                     caretMode = false;
                 offset = caretMode && caretRect is { } r
                     ? MagnifierMath.FollowCaret(offset, r, screen, scale)
+                    : anchorTop > 0 ? MagnifierMath.ZoomFromPointer(new(cursor.X, cursor.Y), screen, scale, 1, anchorTop)
                     : MagnifierMath.Center(new(cursor.X, cursor.Y), screen, scale);
 
                 bool wantHidden = caretMode && hide && scale > 1;

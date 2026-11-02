@@ -33,6 +33,10 @@ internal static class IntegrationChecks
             }
             // Exercise focus-sensitive UIA first, while the newly opened fixture owns focus.
             // Long speech checks must not rely on foreground activation several minutes later.
+            // A packaged launch has no right to take the foreground; a harmless F24 tap from this
+            // process grants it (the last-input rule).
+            var tap = new[] { new Magnifier.MagnifierNative.KeyboardInput { Type = 1, Vk = 0x87 }, new Magnifier.MagnifierNative.KeyboardInput { Type = 1, Vk = 0x87, Flags = 2 } };
+            Magnifier.MagnifierNative.SendInput(2, tap, System.Runtime.InteropServices.Marshal.SizeOf<Magnifier.MagnifierNative.KeyboardInput>());
             window.Topmost = true; window.Activate(); field.Focus();
             field.Select(4, "これは読み上げのテストです。".Length);
             await Task.Delay(150);
@@ -107,9 +111,16 @@ internal static class IntegrationChecks
             {
                 // Recognition needs package identity, so this runs with -Installed. No pointer is moved:
                 // the point is passed in the request.
-                if (!NativeMethods.IsPackaged) return true;
                 field.Select(0, 0); await Task.Delay(150);
                 var origin = field.PointToScreen(new System.Windows.Point(40, 20)); // Physical pixels, first line.
+                // Layout only (boxes and lengths), recognized off the UI thread: WinRT OCR needs MTA here.
+                string layout = await Task.Run(() =>
+                {
+                    using var around = ScreenCapture.CaptureAroundPointer((int)origin.X, (int)origin.Y, 1200, 360, out var inImage);
+                    return OcrPipeline.DescribeAt(around, "ja", inImage);
+                });
+                checks.Add(new { id = "ocr.text_under_point_layout", passed = true, layout });
+                if (!NativeMethods.IsPackaged) return true;
                 var result = await worker.CallAsync(new("ocr-point", Region: new PixelRegion((int)origin.X, (int)origin.Y, 1, 1), Language: "ja"),
                     TimeSpan.FromSeconds(30), CancellationToken.None);
                 return result.Text.Replace(" ", "").Contains("読み上げのテスト", StringComparison.Ordinal);
