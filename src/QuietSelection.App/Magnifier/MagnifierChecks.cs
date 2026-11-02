@@ -53,10 +53,12 @@ internal static class MagnifierChecks
             bool inside = rect is { } r && r.X >= topLeft.X - 2 && r.Right <= bottomRight.X + 2 && r.Y >= topLeft.Y - 2 && r.Bottom <= bottomRight.Y + 2;
             Add("caret.rectangle_inside_own_text_box", inside, new { rect, field = new { topLeft.X, topLeft.Y, Right = bottomRight.X, Bottom = bottomRight.Y } });
 
-            // Live zoom would fight Windows Magnifier, which the user may be using right now.
-            if (Process.GetProcessesByName("Magnify").Length > 0)
+            // Live checks would fight a magnifier the user is using right now (Windows Magnifier or
+            // the installed QuietSelection), and they move the pointer: skip them then.
+            var (activeLevel, _, _) = await ReadScreenAsync();
+            if (Process.GetProcessesByName("Magnify").Length > 0 || activeLevel > 1.001f)
             {
-                checks.Add(new { id = "zoom.live_checks", passed = true, skipped = "Windows Magnifier is running" });
+                checks.Add(new { id = "zoom.live_checks", passed = true, skipped = "Another magnifier is active", activeLevel });
                 await File.WriteAllTextAsync(Path.Combine(directory, "magnifier.json"), JsonSerializer.Serialize(new { syntheticDataOnly = true, checks }, new JsonSerializerOptions { WriteIndented = true }));
                 window.Close(); app.Shutdown(failed ? 1 : 0); return;
             }
@@ -104,6 +106,9 @@ internal static class MagnifierChecks
                 }
                 Add("zoom.applied_2x_centered_on_pointer", Math.Abs(level - 2) < 0.01 && Math.Abs(x - expected.X) <= 1 && Math.Abs(y - expected.Y) <= 1,
                     new { level, x, y, expected, failure });
+                // Without UIAccess (this unpackaged check) Windows refuses the input mapping; zoom keeps working.
+                bool uiAccess = Environment.ProcessPath?.EndsWith("QuietSelection.Magnifier.exe", StringComparison.OrdinalIgnoreCase) == true;
+                Add("input_transform.state_reported", service.InputTransform == uiAccess, new { service.InputTransform, uiAccess });
                 service.Toggle();
                 await Task.Delay(700);
                 (level, _, _) = await ReadScreenAsync();

@@ -5,12 +5,19 @@ namespace QuietSelection.App;
 
 internal sealed partial class AppShell
 {
+    // In the package the magnifier runs in its own UIAccess process (exact clicks on title bars);
+    // without it, or if Windows refuses that process, it runs here.
     private readonly MagnifierService magnifier = new();
+    private readonly MagnifierHostClient magnifierHost = new();
+    private bool magnifierHostStarting;
     private DispatcherTimer? scaleSave;
     private bool magnifierEventsAttached;
 
-    internal double MagnifierScale => magnifier.Scale;
-    internal bool MagnifierRunning => magnifier.Running;
+    internal double MagnifierScale => magnifierHost.Running ? magnifierHost.Scale : magnifier.Scale;
+    internal bool MagnifierRunning => magnifier.Running || magnifierHost.Running;
+    internal bool MagnifierInSeparateProcess => magnifierHost.Running;
+    /// <summary>Clicks on the magnified screen reach what is drawn there; null until the first zoom.</summary>
+    internal bool? MagnifierInputTransform { get; private set; }
 
     /// <summary>Starts, reconfigures or stops the magnifier to match the saved settings.</summary>
     private void ApplyMagnifier()
@@ -21,12 +28,41 @@ internal sealed partial class AppShell
             magnifierEventsAttached = true;
             magnifier.Failed += message => application.Dispatcher.BeginInvoke(() => SetStatus(message));
             magnifier.ScaleChanged += scale => application.Dispatcher.BeginInvoke(() => OnMagnifierScale(scale));
+            magnifier.InputTransformChanged += active => application.Dispatcher.BeginInvoke(() => { MagnifierInputTransform = active; RaiseChanged(); });
+            magnifierHost.Failed += message => application.Dispatcher.BeginInvoke(() => SetStatus(message));
+            magnifierHost.ScaleChanged += scale => application.Dispatcher.BeginInvoke(() => OnMagnifierScale(scale));
+            magnifierHost.InputTransformChanged += active => application.Dispatcher.BeginInvoke(() => { MagnifierInputTransform = active; RaiseChanged(); });
+            magnifierHost.Exited += () => application.Dispatcher.BeginInvoke(OnMagnifierHostExited);
         }
         var options = Settings.Magnifier;
-        if (options.Enabled && !magnifier.Running) magnifier.Start(options);
-        else if (!options.Enabled && magnifier.Running) magnifier.Dispose();
-        else if (options.Enabled) magnifier.Configure(options);
+        bool active = MagnifierRunning || magnifierHostStarting;
+        if (options.Enabled && !active) _ = StartMagnifierAsync(options);
+        else if (!options.Enabled && active) { magnifierHost.Dispose(); magnifier.Dispose(); MagnifierInputTransform = null; }
+        else if (options.Enabled && magnifierHost.Running) magnifierHost.Configure(options);
+        else if (options.Enabled && magnifier.Running) magnifier.Configure(options);
         RaiseChanged();
+    }
+
+    private async Task StartMagnifierAsync(MagnifierSettings options)
+    {
+        magnifierHostStarting = true;
+        try
+        {
+            bool separate = Platform.NativeMethods.IsPackaged && await magnifierHost.StartAsync(options);
+            if (!separate && Settings.Magnifier.Enabled && !exiting) magnifier.Start(Settings.Magnifier);
+        }
+        finally { magnifierHostStarting = false; }
+        RaiseChanged();
+    }
+
+    // The separate process ended on its own: keep magnifying here (without exact title-bar clicks).
+    private void OnMagnifierHostExited()
+    {
+        magnifierHost.Dispose();
+        MagnifierInputTransform = null;
+        if (exiting || !Settings.Magnifier.Enabled) return;
+        magnifier.Start(Settings.Magnifier);
+        SetStatus("Процесс лупы завершился; лупа продолжает работать внутри приложения.");
     }
 
     // The last zoom is remembered for the toggle shortcut; written once the wheel stops.
@@ -47,7 +83,7 @@ internal sealed partial class AppShell
     internal void ToggleMagnifier()
     {
         EnsureMagnifierEnabled();
-        magnifier.Toggle();
+        if (magnifierHost.Running) magnifierHost.Toggle(); else magnifier.Toggle();
     }
 
     internal void SetMagnifierInvert(bool value)
@@ -85,6 +121,7 @@ internal sealed partial class AppShell
     private void StopMagnifier()
     {
         scaleSave?.Stop();
+        magnifierHost.Dispose(); // Its process restores the screen when the pipe closes.
         magnifier.Dispose(); // Restores 1× zoom, normal colors and the pointer.
     }
 }

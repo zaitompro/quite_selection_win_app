@@ -46,6 +46,9 @@ internal static class MagnifierNative
     [DllImport("magnification.dll")] internal static extern bool MagGetFullscreenTransform(out float level, out int x, out int y);
     [DllImport("magnification.dll")] internal static extern bool MagSetFullscreenColorEffect(ref ColorEffect effect);
     [DllImport("magnification.dll")] internal static extern bool MagShowSystemCursor(bool show);
+    // Routes mouse, pen and touch on the magnified screen to the element shown there (Windows 10 1703+).
+    // Requires UIAccess; otherwise fails with ERROR_ACCESS_DENIED.
+    [DllImport("magnification.dll", SetLastError = true)] internal static extern bool MagSetInputTransform(bool enabled, ref Rect source, ref Rect destination);
     [DllImport("dwmapi.dll")] internal static extern int DwmFlush();
 
     [DllImport("user32.dll")] internal static extern bool GetCursorPos(out Point point);

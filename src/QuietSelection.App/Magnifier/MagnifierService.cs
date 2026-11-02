@@ -44,6 +44,13 @@ internal sealed class MagnifierService : IDisposable
     internal event Action<string>? Failed;
     /// <summary>Raised from a background thread when the target zoom changes.</summary>
     internal event Action<double>? ScaleChanged;
+    /// <summary>
+    /// Whether input on the magnified screen is mapped to what is shown there (title bars, caption
+    /// buttons). Null until the first zoom; false without UIAccess, where Windows routes input by
+    /// unmagnified coordinates and title bars can miss.
+    /// </summary>
+    internal bool? InputTransform { get; private set; }
+    internal event Action<bool>? InputTransformChanged;
     internal double Scale { get { lock (gate) return targetScale; } }
     internal bool Inverted { get { lock (gate) return invert; } }
     internal bool Running => render is not null;
@@ -150,7 +157,7 @@ internal sealed class MagnifierService : IDisposable
                 var next = scale <= 1 ? (1f, 0, 0) : ((float)scale, (int)Math.Round(offset.X), (int)Math.Round(offset.Y));
                 if (next != applied)
                 {
-                    if (MagSetFullscreenTransform(next.Item1, next.Item2, next.Item3)) applied = next;
+                    if (MagSetFullscreenTransform(next.Item1, next.Item2, next.Item3)) { applied = next; ApplyInputTransform(next, screen); }
                     else if (!reported)
                     {
                         reported = true;
@@ -163,12 +170,31 @@ internal sealed class MagnifierService : IDisposable
         finally
         {
             // Leave the screen exactly as it was.
+            if (InputTransform == true) { var none = new Rect(); MagSetInputTransform(false, ref none, ref none); }
             MagShowSystemCursor(true);
             var identity = ColorEffect.Identity();
             MagSetFullscreenColorEffect(ref identity);
             MagSetFullscreenTransform(1, 0, 0);
             MagUninitialize();
         }
+    }
+
+    private bool inputTransformDenied;
+
+    // Source: the desktop area shown; destination: the whole screen it is drawn on.
+    private void ApplyInputTransform((float Level, int X, int Y) transform, MagPoint screen)
+    {
+        if (inputTransformDenied) return;
+        var destination = new Rect { Left = 0, Top = 0, Right = (int)screen.X, Bottom = (int)screen.Y };
+        var source = new Rect
+        {
+            Left = transform.X, Top = transform.Y,
+            Right = transform.X + (int)Math.Round(screen.X / transform.Level), Bottom = transform.Y + (int)Math.Round(screen.Y / transform.Level)
+        };
+        bool ok = MagSetInputTransform(transform.Level > 1, ref source, ref destination);
+        bool? state = ok ? true : Marshal.GetLastWin32Error() == 5 ? false : InputTransform;
+        if (state == false) inputTransformDenied = true;
+        if (state != InputTransform && state is { } known) { InputTransform = known; InputTransformChanged?.Invoke(known); }
     }
 
     // ---- Mouse thread ---------------------------------------------------------------------

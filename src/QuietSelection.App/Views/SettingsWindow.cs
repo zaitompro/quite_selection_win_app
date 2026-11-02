@@ -671,6 +671,15 @@ internal sealed partial class SettingsWindow : Window
         step.SelectionChanged += (_, _) => { options.Step = ZoomSteps[step.SelectedIndex].Step; shell.Save(); };
         Add(Ui.SettingRow("\uE9E9", "Шаг масштаба", "Насколько меняется увеличение за один щелчок колеса.", step));
 
+        var exact = new TextBlock { VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap, MaxWidth = 260, TextAlignment = TextAlignment.Right };
+        updaters.Add(() => exact.Text = shell.MagnifierInputTransform switch
+        {
+            true => "Включено",
+            false => "Недоступно: нужен доверенный сертификат",
+            null => shell.MagnifierRunning ? "Проверится при увеличении" : "—"
+        });
+        Add(Ui.SettingRow("\uE8B0", "Точное попадание в заголовки", "Щелчки по заголовкам и кнопкам окон под увеличением. Требует права UIAccess для процесса лупы (см. docs/installation.md).", exact));
+
         Add(Ui.Section("Цвета и слежение"));
         Add(Ui.SettingRow("\uE790", "Негатив", "Инвертирует цвета всего экрана. Работает и без увеличения.",
             Ui.Toggle(options.Invert, shell.SetMagnifierInvert, "Негатив")));

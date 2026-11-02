@@ -20,6 +20,18 @@ try {
         Copy-Item -LiteralPath (Join-Path $buildDirectory $name) -Destination $staging
     }
     Copy-Item -LiteralPath (Join-Path $projectRoot 'packaging/AppxManifest.xml') -Destination $staging
+    # The magnifier runs as a copy of the launcher whose manifest asks for UIAccess
+    # (MagSetInputTransform needs it). Only this process gets the privilege.
+    $magnifierExe = Join-Path $staging 'QuietSelection.Magnifier.exe'
+    Copy-Item -LiteralPath (Join-Path $staging 'QuietSelection.exe') -Destination $magnifierExe
+    $uiAccessManifest = Join-Path $staging 'uiaccess.manifest'
+    $manifestText = Get-Content -LiteralPath (Join-Path $projectRoot 'src/QuietSelection.App/app.manifest') -Raw
+    if ($manifestText -notmatch 'uiAccess="false"') { throw 'APP_MANIFEST_UIACCESS_MARKER_MISSING' }
+    [IO.File]::WriteAllText($uiAccessManifest, ($manifestText -replace 'uiAccess="false"', 'uiAccess="true"'))
+    $mt = 'C:/Program Files (x86)/Windows Kits/10/bin/10.0.26100.0/x64/mt.exe'
+    & $mt -nologo -manifest $uiAccessManifest "-outputresource:$magnifierExe;#1"
+    if ($LASTEXITCODE -ne 0) { throw 'MAGNIFIER_MANIFEST_FAILED' }
+    Remove-Item -LiteralPath $uiAccessManifest
     Copy-Item -LiteralPath (Join-Path $projectRoot 'LICENSE') -Destination $staging
     $runtime = Join-Path $staging 'runtime'
     New-Item -ItemType Directory -Path (Join-Path $runtime 'host'), (Join-Path $runtime 'shared') -Force | Out-Null
